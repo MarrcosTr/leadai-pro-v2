@@ -37,6 +37,78 @@
     input::placeholder,textarea::placeholder{color:#6b7280!important}
     option{background:#1e1e2e}
     textarea{resize:none}
+
+    /* ── LAYOUT DESKTOP ── */
+    @media (min-width: 1024px) {
+      .desktop-shell {
+        display: flex;
+        min-height: 100vh;
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      .desktop-sidebar {
+        width: 240px;
+        flex-shrink: 0;
+        position: fixed;
+        top: 0; left: 50%;
+        transform: translateX(-700px);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        padding: 28px 16px;
+        background: rgba(0,0,0,0.35);
+        backdrop-filter: blur(20px);
+        border-right: 1px solid rgba(255,255,255,0.07);
+        z-index: 40;
+      }
+      .desktop-content {
+        margin-left: 240px;
+        flex: 1;
+        max-width: 860px;
+        min-height: 100vh;
+        padding-bottom: 32px;
+      }
+      .bottom-nav-mobile { display: none !important; }
+      .desktop-sidebar-logo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 8px;
+        margin-bottom: 32px;
+      }
+      .desktop-nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 11px 14px;
+        border-radius: 14px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #6b7280;
+        cursor: pointer;
+        transition: all .18s;
+        margin-bottom: 4px;
+        border: 1px solid transparent;
+        text-align: left;
+        width: 100%;
+        background: none;
+      }
+      .desktop-nav-item:hover {
+        color: #f1f5f9;
+        background: rgba(99,102,241,0.08);
+        border-color: rgba(99,102,241,0.15);
+      }
+      .desktop-nav-item.active {
+        color: #a5b4fc;
+        background: rgba(99,102,241,0.18);
+        border-color: rgba(99,102,241,0.35);
+      }
+      .desktop-nav-item .nav-icon { font-size: 18px; width: 24px; text-align: center; }
+    }
+    @media (max-width: 1023px) {
+      .desktop-sidebar { display: none !important; }
+      .desktop-content { margin-left: 0 !important; max-width: 100% !important; }
+    }
   </style>
 </head>
 <body>
@@ -62,32 +134,8 @@ async function sbFetch(path,opts={}) {
   catch{return{ok:res.ok,status:res.status,data:text};}
 }
 
-// ─── DADOS ───────────────────────────────────────────────────
-const now = Date.now();
-const MOCK_LEADS = [
-  { id:1, name:"Clínica Estética Bella Vita", segment:"Clínica de Estética", city:"São Paulo", phone:"(11) 98765-4321", has_whatsapp:true, rating:3.8, review_count:127, website:null, status:"new",
-    pain_points:["demora no agendamento","dificuldade para marcar horário","atendimento demorado"],
-    ai_score:94, ai_message:"Vi que vários clientes comentaram sobre dificuldade de agendamento na sua clínica — tenho uma solução que resolve isso em 5 minutos e já ajudou mais de 200 clínicas a dobrar os agendamentos online.", score_label:"Quente 🔥",
-    history:[{type:"extracted",label:"Lead extraído",ts:now-7*86400000},{type:"ai",label:"Score de IA gerado: 94 pts",ts:now-7*86400000+60000}] },
-  { id:2, name:"Restaurante Sabor & Arte", segment:"Restaurante", city:"São Paulo", phone:"(11) 97654-3210", has_whatsapp:true, rating:4.1, review_count:89, website:null, status:"sent",
-    pain_points:["demora na entrega","sistema de pedidos confuso"],
-    ai_score:78, ai_message:"Notei que clientes mencionam demora nos pedidos no seu restaurante — nossa plataforma reduziu o tempo de atendimento em 40% para mais de 150 restaurantes.", score_label:"Morno ⚡",
-    history:[{type:"extracted",label:"Lead extraído",ts:now-5*86400000},{type:"ai",label:"Score de IA gerado: 78 pts",ts:now-5*86400000+60000},{type:"sent",label:"Mensagem enviada via WhatsApp",ts:now-3*86400000}] },
-  { id:3, name:"Salão Hair Studio", segment:"Salão de Beleza", city:"Campinas", phone:"(19) 99887-7665", has_whatsapp:true, rating:4.5, review_count:312, website:"hairstudio.com.br", status:"replied",
-    pain_points:["agendamento só por telefone","cancelamentos frequentes"],
-    ai_score:65, ai_message:"Seu salão tem ótimas avaliações! Vi que alguns clientes gostariam de agendar online — posso mostrar como implementar isso em menos de 1 dia.", score_label:"Morno ⚡",
-    history:[{type:"extracted",label:"Lead extraído",ts:now-10*86400000},{type:"ai",label:"Score de IA gerado: 65 pts",ts:now-10*86400000+60000},{type:"sent",label:"Mensagem enviada via WhatsApp",ts:now-8*86400000},{type:"replied",label:"Lead respondeu a mensagem",ts:now-6*86400000}] },
-  { id:4, name:"Academia FitLife", segment:"Academia", city:"São Paulo", phone:"(11) 93322-1100", has_whatsapp:true, rating:3.5, review_count:198, website:null, status:"new",
-    pain_points:["não tem app","aulas sem horário fixo","musculação sempre lotada"],
-    ai_score:91, ai_message:"Muitos alunos reclamam da falta de um app para acompanhar treinos na sua academia — temos uma solução white-label que seus alunos vão amar, pronta em 24h.", score_label:"Quente 🔥",
-    history:[{type:"extracted",label:"Lead extraído",ts:now-2*86400000},{type:"ai",label:"Score de IA gerado: 91 pts",ts:now-2*86400000+60000}] },
-  { id:5, name:"Farmácia Saúde & Vida", segment:"Farmácia", city:"Guarulhos", phone:"(11) 96655-4433", has_whatsapp:true, rating:4.7, review_count:523, website:"farmaciasvida.com.br", status:"closed",
-    pain_points:["fila de espera"],
-    ai_score:45, ai_message:"Sua farmácia tem excelente reputação! Podemos ajudar a reduzir as filas com um sistema de senhas digital.", score_label:"Frio ❄️",
-    history:[{type:"extracted",label:"Lead extraído",ts:now-20*86400000},{type:"ai",label:"Score de IA gerado: 45 pts",ts:now-20*86400000+60000},{type:"sent",label:"Mensagem enviada via WhatsApp",ts:now-18*86400000},{type:"replied",label:"Lead respondeu",ts:now-16*86400000},{type:"closed",label:"Negócio fechado! 🏆",ts:now-14*86400000}] },
-];
-
-// ── PLANOS — com campo "credits" para não quebrar o Dashboard ──
+// ─── DADOS ────────────────────────────────────────────────────
+// CORREÇÃO: MOCK_LEADS removidos do estado inicial — app começa com lista vazia
 const PLANS = [
   { id:"free",    label:"Free",    price:0,   maxLeads:10,  maxDisparos:3,   credits:50,  features:["10 leads/mês","3 disparos/mês","Score de IA básico","Suporte por email"], cta:"Plano Atual", badge:null, color:"gray" },
   { id:"starter", label:"Starter", price:67,  maxLeads:100, maxDisparos:50,  credits:100, features:["100 leads/mês","50 disparos/mês","Score de IA completo","Mensagem personalizada por IA","CRM completo","Suporte prioritário"], cta:"Assinar por R$ 67/mês", badge:"Mais popular 🔥", color:"indigo" },
@@ -109,7 +157,7 @@ const ONBOARD_STEPS = [
   { icon:"📊", title:"Mini-CRM com funil integrado", sub:"Nunca deixe um lead esfriar", body:"Acompanhe cada lead no funil: Enviado → Respondeu → Fechou. Tudo no celular, de qualquer lugar.", color:"from-orange-500 to-red-500" },
 ];
 
-// ─── HELPERS ─────────────────────────────────────────────────
+// ─── HELPERS ──────────────────────────────────────────────────
 function timeAgo(ts) {
   const d=(Date.now()-ts)/1000;
   if(d<60) return "agora";
@@ -139,7 +187,7 @@ function Badge({ text, color="indigo" }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full border ${c[color]||c.indigo}`}>{text}</span>;
 }
 
-// ─── ONBOARDING ──────────────────────────────────────────────
+// ─── ONBOARDING ───────────────────────────────────────────────
 function OnboardingModal({ onDone }) {
   const [step,setStep]=useState(0);
   const s=ONBOARD_STEPS[step];
@@ -165,7 +213,7 @@ function OnboardingModal({ onDone }) {
   );
 }
 
-// ─── TIP BOX ─────────────────────────────────────────────────
+// ─── TIP BOX ──────────────────────────────────────────────────
 const TIPS = {
   search: { icon:"💡", title:"Dica de extração", text:"Nichos com nota entre 3.0 e 4.0 têm mais dores ativas para resolver — são os leads mais quentes!", dismiss:"tip_search" },
   leads:  { icon:"🎯", title:"Dica de abordagem", text:"Ordene por Score de IA e comece pelos leads acima de 80. A chance de resposta é 3x maior.", dismiss:"tip_leads" },
@@ -190,7 +238,7 @@ function TipBox({ page }) {
   );
 }
 
-// ─── INTERACTION HISTORY ─────────────────────────────────────
+// ─── INTERACTION HISTORY ──────────────────────────────────────
 const HISTORY_META = {
   extracted:{color:"#6366f1",icon:"📍",bg:"bg-indigo-500/20"},
   ai:{color:"#a855f7",icon:"🤖",bg:"bg-purple-500/20"},
@@ -234,7 +282,7 @@ function InteractionHistory({ history=[], onAddNote }) {
   );
 }
 
-// ─── LEAD MODAL ──────────────────────────────────────────────
+// ─── LEAD MODAL ───────────────────────────────────────────────
 function LeadModal({ lead, onClose, onStatusChange, onUpdateLead }) {
   const [tab,setTab]=useState("msg");
   const [editMode,setEditMode]=useState(false);
@@ -287,7 +335,12 @@ function LeadModal({ lead, onClose, onStatusChange, onUpdateLead }) {
           <>
             <div className="px-5 pt-4 pb-3 border-b border-white/8">
               <p className="text-xs font-bold text-red-400 uppercase tracking-wider mb-2">🎯 Dores Detectadas</p>
-              <div className="flex flex-wrap gap-1.5">{(lead.pain_points||[]).map(p=><Badge key={p} text={p} color="red"/>)}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {(lead.pain_points||[]).length>0
+                  ? (lead.pain_points||[]).map(p=><Badge key={p} text={p} color="red"/>)
+                  : <span className="text-xs text-gray-500">Analisando...</span>
+                }
+              </div>
             </div>
             <div className="px-5 pt-4 pb-4 border-b border-white/8">
               <div className="flex items-center justify-between mb-2">
@@ -301,7 +354,7 @@ function LeadModal({ lead, onClose, onStatusChange, onUpdateLead }) {
                 </div>
               ):(
                 <div className="bg-[#1e3a2e] rounded-2xl rounded-tl-sm px-4 py-3 border border-green-900/40">
-                  <p className="text-sm text-gray-100 leading-relaxed">{editedMsg}</p>
+                  <p className="text-sm text-gray-100 leading-relaxed">{editedMsg||<span className="text-gray-500 italic">Mensagem não gerada.</span>}</p>
                   <div className="flex items-center justify-end gap-1 mt-2"><span className="text-[10px] text-gray-500">Agora</span><span className="text-[10px] text-green-400">✓✓</span></div>
                 </div>
               )}
@@ -339,7 +392,7 @@ function LeadModal({ lead, onClose, onStatusChange, onUpdateLead }) {
   );
 }
 
-// ─── CAMPAIGN REPORT ─────────────────────────────────────────
+// ─── CAMPAIGN REPORT ──────────────────────────────────────────
 function CampaignReport({ leads }) {
   const total=leads.length,sent=leads.filter(l=>l.status!=="new").length,replied=leads.filter(l=>["replied","closed"].includes(l.status)).length,closed=leads.filter(l=>l.status==="closed").length;
   const convRate=sent>0?Math.round(closed/sent*100):0,respRate=sent>0?Math.round(replied/sent*100):0,hotCount=leads.filter(l=>l.ai_score>=80).length;
@@ -359,7 +412,7 @@ function CampaignReport({ leads }) {
   );
 }
 
-// ─── AUTH SCREEN ─────────────────────────────────────────────
+// ─── AUTH SCREEN ──────────────────────────────────────────────
 function AuthScreen({ onAuth }) {
   const [mode,setMode]=useState("login");
   const [email,setEmail]=useState("");
@@ -383,7 +436,7 @@ function AuthScreen({ onAuth }) {
         const {ok,data}=await sbFetch("/auth/v1/signup",{method:"POST",body:JSON.stringify({email,password,data:{full_name:name}})});
         if(!ok) throw new Error(data.error_description||"Erro ao cadastrar");
         if(data.access_token){storeSession(data);onAuth({session:data,user:data.user});}
-        else setSuccess("✅ Verifique seu email para confirmar!");
+        else setSuccess("✅ Verifique seu email para confirmar o cadastro!");
       } else {
         await sbFetch("/auth/v1/recover",{method:"POST",body:JSON.stringify({email})});
         setSuccess("✅ Link enviado para seu email!");
@@ -419,7 +472,7 @@ function AuthScreen({ onAuth }) {
   );
 }
 
-// ─── PLANS SCREEN ────────────────────────────────────────────
+// ─── PLANS SCREEN ─────────────────────────────────────────────
 function PlansScreen({ currentPlan, onSelect, onBack }) {
   const [loading,setLoading]=useState(null);
   const [annual,setAnnual]=useState(false);
@@ -459,12 +512,11 @@ function PlansScreen({ currentPlan, onSelect, onBack }) {
   );
 }
 
-// ─── DASHBOARD ───────────────────────────────────────────────
+// ─── DASHBOARD ────────────────────────────────────────────────
 function Dashboard({ leads, user, plan, onNavigate, credits }) {
   const hot=leads.filter(l=>l.ai_score>=80&&l.status==="new").sort((a,b)=>b.ai_score-a.ai_score);
   const closed=leads.filter(l=>l.status==="closed").length;
   const planInfo=PLANS.find(p=>p.id===plan)||PLANS[0];
-  // Proteção: evita divisão por zero
   const creditMax=planInfo.credits||50;
   const creditPct=Math.min(100,Math.round((credits/creditMax)*100));
   const name=user?.user_metadata?.full_name||user?.email?.split("@")[0]||"Usuário";
@@ -500,12 +552,22 @@ function Dashboard({ leads, user, plan, onNavigate, credits }) {
           ))}</div>
         </div>
       )}
+      {leads.length===0&&(
+        <div className="px-4 mt-6">
+          <div className="glass rounded-2xl p-6 border border-white/5 text-center">
+            <p className="text-4xl mb-3">🔍</p>
+            <p className="font-bold text-sm mb-1">Nenhum lead ainda</p>
+            <p className="text-gray-500 text-xs mb-4">Faça sua primeira busca para extrair leads reais do Google Maps com análise de IA.</p>
+            <button onClick={()=>onNavigate("search")} className="gradient-btn rounded-xl px-6 py-2.5 font-bold text-white text-sm glow">Buscar agora →</button>
+          </div>
+        </div>
+      )}
       <div className="px-4 mt-4"><button onClick={()=>onNavigate("search")} className="w-full gradient-btn rounded-2xl py-4 font-bold text-white glow flex items-center justify-center gap-2">🔍 Extrair Novos Leads com IA</button></div>
     </div>
   );
 }
 
-// ─── SEARCH PAGE ─────────────────────────────────────────────
+// ─── SEARCH PAGE ──────────────────────────────────────────────
 function SearchPage({ onLeadsFound, plan }) {
   const [form,setForm]=useState({niche:"",city:"",radius:"10",minRating:"3.5",minReviews:"20",hasWebsite:"any"});
   const [loading,setLoading]=useState(false);
@@ -513,7 +575,7 @@ function SearchPage({ onLeadsFound, plan }) {
   const [done,setDone]=useState(false);
   const [resultCount,setResultCount]=useState(0);
   const [errorMsg,setErrorMsg]=useState("");
-  const niches=["Clínica de Estética","Salão de Beleza","Restaurante","Academia","Farmácia","Odontologia","Advocacia","Contabilidade","Auto Peças","Petshop"];
+  const niches=["Clínica de Estética","Salão de Beleza","Restaurante","Academia","Farmácia","Odontologia","Advocacia","Contabilidade","Auto Peças","Petshop","Dentista","Mecânica"];
 
   const run=async()=>{
     if(!form.niche||!form.city){alert("Preencha nicho e cidade!");return;}
@@ -523,7 +585,9 @@ function SearchPage({ onLeadsFound, plan }) {
 
     setLoading(true);setDone(false);setErrorMsg("");
     const steps=["🔍 Buscando no Google Maps...","✅ Estabelecimentos encontrados","🧹 Filtrando por critérios...","📱 Validando dados...","🤖 IA analisando avaliações...","✨ Gerando scores de oportunidade..."];
-    for(const s of steps){setStep(s);await new Promise(r=>setTimeout(r,700));}
+    let si=0;
+    setStep(steps[si]);
+    const stepInterval=setInterval(()=>{si=Math.min(si+1,steps.length-1);setStep(steps[si]);},900);
 
     try {
       const resp=await fetch("/api/search",{
@@ -531,24 +595,24 @@ function SearchPage({ onLeadsFound, plan }) {
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({niche:form.niche,city:form.city,minRating:form.minRating,minReviews:form.minReviews,serpKey,geminiKey})
       });
+      clearInterval(stepInterval);
 
-      // Verifica se a resposta é JSON válido
       const contentType=resp.headers.get("content-type")||"";
       if(!contentType.includes("application/json")){
         const text=await resp.text();
-        throw new Error(`Resposta inesperada do servidor: ${text.slice(0,100)}`);
+        throw new Error(`Resposta inesperada: ${text.slice(0,120)}`);
       }
-
       const result=await resp.json();
       if(result.error) throw new Error(result.error);
       if(!result.leads||result.leads.length===0){
-        setErrorMsg("Nenhum lead encontrado com esses filtros. Tente aumentar o raio ou diminuir os filtros.");
+        setErrorMsg("Nenhum lead encontrado com esses filtros. Tente aumentar o raio ou diminuir os filtros de nota/avaliações.");
         setLoading(false);return;
       }
       setResultCount(result.leads.length);
       onLeadsFound(result.leads);
       setDone(true);
     } catch(e){
+      clearInterval(stepInterval);
       setErrorMsg("Erro: "+e.message);
     }
     setLoading(false);
@@ -562,11 +626,11 @@ function SearchPage({ onLeadsFound, plan }) {
         <div>
           <label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">NICHO *</label>
           <input value={form.niche} onChange={e=>setForm({...form,niche:e.target.value})} placeholder="Ex: Clínica de Estética..." className="w-full glass rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-500 border border-white/10"/>
-          <div className="flex flex-wrap gap-2 mt-2">{niches.slice(0,6).map(n=><button key={n} onClick={()=>setForm({...form,niche:n})} className={`text-xs px-3 py-1 rounded-full border transition-all ${form.niche===n?'border-indigo-500 bg-indigo-500/20 text-indigo-300':'border-white/10 text-gray-500 hover:border-white/30'}`}>{n}</button>)}</div>
+          <div className="flex flex-wrap gap-2 mt-2">{niches.slice(0,8).map(n=><button key={n} onClick={()=>setForm({...form,niche:n})} className={`text-xs px-3 py-1 rounded-full border transition-all ${form.niche===n?'border-indigo-500 bg-indigo-500/20 text-indigo-300':'border-white/10 text-gray-500 hover:border-white/30'}`}>{n}</button>)}</div>
         </div>
         <div>
           <label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">CIDADE *</label>
-          <input value={form.city} onChange={e=>setForm({...form,city:e.target.value})} placeholder="Ex: São Paulo, Campinas..." className="w-full glass rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-500 border border-white/10"/>
+          <input value={form.city} onChange={e=>setForm({...form,city:e.target.value})} placeholder="Ex: São Paulo, Campinas, Sumaré..." className="w-full glass rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-500 border border-white/10"/>
         </div>
         <div className="grid grid-cols-2 gap-3">
           {[["radius","RAIO (KM)",["5","10","20","50"].map(v=>({v,l:`${v} km`}))],["minRating","NOTA MÍNIMA ★",["2","2.5","3","3.5","4","4.5"].map(v=>({v,l:`≥ ${v}`}))],["minReviews","MIN. AVALIAÇÕES",["10","20","50","100"].map(v=>({v,l:`≥ ${v}`}))],["hasWebsite","TEM SITE?",[{v:"any",l:"Qualquer"},{v:"no",l:"Sem site 🎯"},{v:"yes",l:"Com site"}]]].map(([key,label,opts])=>(
@@ -574,7 +638,7 @@ function SearchPage({ onLeadsFound, plan }) {
           ))}
         </div>
         {loading&&<div className="glass rounded-2xl p-4 border border-indigo-500/30"><div className="flex items-center gap-3 mb-2"><Spinner/><p className="text-sm text-indigo-300">{step}</p></div><div className="h-1.5 bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full animate-pulse" style={{width:"70%"}}/></div></div>}
-        {errorMsg&&<div className="glass rounded-2xl p-4 border border-red-500/30"><p className="text-red-400 font-semibold text-sm">❌ {errorMsg}</p></div>}
+        {errorMsg&&<div className="glass rounded-2xl p-4 border border-red-500/30"><p className="text-red-400 font-semibold text-sm">❌ {errorMsg}</p><p className="text-gray-500 text-xs mt-1">Verifique suas chaves em Perfil → Configurações</p></div>}
         {done&&<div className="glass rounded-2xl p-4 border border-green-500/30 glow-green"><p className="text-green-400 font-semibold">✅ {resultCount} leads extraídos e analisados!</p><p className="text-gray-400 text-xs mt-1">Veja os resultados na aba Leads</p></div>}
         <button onClick={run} disabled={loading} className="w-full gradient-btn rounded-2xl py-4 font-bold text-white glow flex items-center justify-center gap-2 disabled:opacity-50">
           {loading?<><Spinner/> Processando...</>:<><span>🚀</span> Extrair e Analisar com IA</>}
@@ -584,7 +648,7 @@ function SearchPage({ onLeadsFound, plan }) {
   );
 }
 
-// ─── LEADS PAGE ──────────────────────────────────────────────
+// ─── LEADS PAGE ───────────────────────────────────────────────
 function LeadsPage({ leads, onStatusChange, onUpdateLead }) {
   const [filter,setFilter]=useState("all");
   const [sort,setSort]=useState("score");
@@ -611,20 +675,26 @@ function LeadsPage({ leads, onStatusChange, onUpdateLead }) {
                 <div className="flex items-start justify-between gap-2"><p className="font-semibold text-sm truncate">{l.name}</p><Badge text={sLbl[l.status]||l.status} color={sCol[l.status]||"gray"}/></div>
                 <p className="text-gray-400 text-xs">{l.segment} · {l.city}</p>
                 <div className="flex items-center gap-3 mt-1"><span className="text-xs text-yellow-400">⭐ {l.rating}</span><span className="text-xs text-gray-500">{l.review_count} aval.</span><span className={`text-xs ${l.has_whatsapp?"text-green-400":"text-red-400"}`}>{l.has_whatsapp?"✓ WA":"✗ WA"}</span></div>
-                {(l.pain_points||[]).length>0&&<div className="mt-1.5"><Badge text={`🎯 ${l.pain_points[0]}`} color="red"/></div>}
+                {(l.pain_points||[]).length>0&&(l.pain_points[0]!=="análise indisponível")&&<div className="mt-1.5"><Badge text={`🎯 ${l.pain_points[0]}`} color="red"/></div>}
                 {(l.history||[]).length>0&&<div className="flex items-center gap-1 mt-2 overflow-hidden">{[...l.history].slice(-3).map((h,i)=>{const m=HISTORY_META[h.type]||HISTORY_META.note;return <span key={i} className={`text-xs px-1.5 py-0.5 rounded ${m.bg}`} title={h.label}>{m.icon}</span>;})}{l.history.length>3&&<span className="text-xs text-gray-600">+{l.history.length-3}</span>}</div>}
               </div>
             </div>
           </div>
         ))}
-        {filtered.length===0&&<div className="text-center text-gray-500 py-12">Nenhum lead aqui</div>}
+        {filtered.length===0&&(
+          <div className="text-center text-gray-500 py-12">
+            <p className="text-3xl mb-2">📭</p>
+            <p>Nenhum lead encontrado</p>
+            <p className="text-xs mt-1">Faça uma busca na aba Buscar</p>
+          </div>
+        )}
       </div>
       {selectedLead&&<LeadModal lead={selectedLead} onClose={()=>setSelected(null)} onStatusChange={onStatusChange} onUpdateLead={onUpdateLead}/>}
     </div>
   );
 }
 
-// ─── CRM PAGE ────────────────────────────────────────────────
+// ─── CRM PAGE ─────────────────────────────────────────────────
 function CRMPage({ leads, onStatusChange, onUpdateLead }) {
   const [selected,setSelected]=useState(null);
   const selectedLead=selected?leads.find(l=>l.id===selected.id)||selected:null;
@@ -659,13 +729,22 @@ function CRMPage({ leads, onStatusChange, onUpdateLead }) {
   );
 }
 
-// ─── PROFILE PAGE ────────────────────────────────────────────
+// ─── PROFILE PAGE ─────────────────────────────────────────────
 function ProfilePage({ user, plan, credits, onNavigate, onLogout }) {
   const [cfg,setCfg]=useState({geminiKey:getLs("cfg_geminiKey",""),serpKey:getLs("cfg_serpKey",""),wahaUrl:getLs("cfg_wahaUrl",""),produto:getLs("cfg_produto",""),nicho:getLs("cfg_nicho",""),followup:getLs("cfg_followup","2")});
   const [saved,setSaved]=useState(false);
   const name=user?.user_metadata?.full_name||user?.email?.split("@")[0]||"Usuário";
   const planInfo=PLANS.find(p=>p.id===plan)||PLANS[0];
-  const save=()=>{setLs("cfg_geminiKey",cfg.geminiKey);setLs("cfg_serpKey",cfg.serpKey);setLs("cfg_wahaUrl",cfg.wahaUrl);setLs("cfg_produto",cfg.produto);setLs("cfg_nicho",cfg.nicho);setSaved(true);setTimeout(()=>setSaved(false),2000);};
+  const save=()=>{
+    setLs("cfg_geminiKey",cfg.geminiKey);
+    setLs("cfg_serpKey",cfg.serpKey);
+    setLs("cfg_wahaUrl",cfg.wahaUrl);
+    setLs("cfg_produto",cfg.produto);
+    setLs("cfg_nicho",cfg.nicho);
+    setLs("cfg_followup",cfg.followup);
+    setSaved(true);
+    setTimeout(()=>setSaved(false),2000);
+  };
   return (
     <div className="pb-24 slide-in">
       <div className="px-4 pt-6 pb-4">
@@ -705,11 +784,39 @@ function ProfilePage({ user, plan, credits, onNavigate, onLogout }) {
   );
 }
 
-// ─── BOTTOM NAV ──────────────────────────────────────────────
+// ─── DESKTOP SIDEBAR ──────────────────────────────────────────
+function DesktopSidebar({ active, onChange, plan, user }) {
+  const name=user?.user_metadata?.full_name||user?.email?.split("@")[0]||"Usuário";
+  const tabs=[{id:"dashboard",icon:"🏠",label:"Início"},{id:"search",icon:"🔍",label:"Buscar Leads"},{id:"leads",icon:"📋",label:"Meus Leads"},{id:"crm",icon:"📊",label:"Funil CRM"},{id:"profile",icon:"👤",label:"Perfil & APIs"}];
+  return (
+    <div className="desktop-sidebar">
+      <div className="desktop-sidebar-logo">
+        <div className="w-9 h-9 gradient-btn rounded-xl flex items-center justify-center text-lg glow flex-shrink-0">🤖</div>
+        <div><p className="font-black text-sm gradient-text leading-tight">LeadAI Pro</p><p className="text-[10px] text-gray-500">Prospecção com IA</p></div>
+      </div>
+      <div className="flex-1">
+        {tabs.map(t=>(
+          <button key={t.id} onClick={()=>onChange(t.id)} className={`desktop-nav-item ${active===t.id?'active':''}`}>
+            <span className="nav-icon">{t.icon}</span>
+            <span>{t.label}</span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-auto pt-4 border-t border-white/8">
+        <div className="flex items-center gap-3 px-2 py-2">
+          <div className="w-8 h-8 gradient-btn rounded-full flex items-center justify-center text-sm flex-shrink-0">{name[0]?.toUpperCase()||"U"}</div>
+          <div className="min-w-0"><p className="text-xs font-semibold truncate">{name.split(" ")[0]}</p><p className={`text-[10px] ${plan==="pro"?'text-yellow-400':plan==="starter"?'text-indigo-400':'text-gray-500'}`}>{plan==="pro"?"⚡ Pro":plan==="starter"?"🚀 Starter":"Free"}</p></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── BOTTOM NAV (mobile) ──────────────────────────────────────
 function BottomNav({ active, onChange }) {
   const tabs=[{id:"dashboard",icon:"🏠",label:"Início"},{id:"search",icon:"🔍",label:"Buscar"},{id:"leads",icon:"📋",label:"Leads"},{id:"crm",icon:"📊",label:"CRM"},{id:"profile",icon:"👤",label:"Perfil"}];
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 glass border-t border-white/10">
+    <nav className="bottom-nav-mobile fixed bottom-0 left-0 right-0 z-40 glass border-t border-white/10">
       <div className="flex max-w-lg mx-auto">
         {tabs.map(t=>(
           <button key={t.id} onClick={()=>onChange(t.id)} className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${active===t.id?'text-indigo-400':'text-gray-600'}`}>
@@ -723,13 +830,14 @@ function BottomNav({ active, onChange }) {
   );
 }
 
-// ─── APP ROOT ────────────────────────────────────────────────
+// ─── APP ROOT ─────────────────────────────────────────────────
 function App() {
   const [auth,setAuth]=useState(null);
   const [page,setPage]=useState("dashboard");
-  const [leads,setLeads]=useState(MOCK_LEADS);
+  // CORREÇÃO: começa com lista vazia, não com MOCK_LEADS
+  const [leads,setLeads]=useState([]);
   const [plan,setPlan]=useState("free");
-  const [credits,setCredits]=useState(48);
+  const [credits,setCredits]=useState(50);
   const [showOnboard,setShowOnboard]=useState(false);
 
   useEffect(()=>{
@@ -743,7 +851,7 @@ function App() {
   },[auth]);
 
   const handleAuth=(a)=>{setAuth(a);storeSession({...a.session,user:a.user});};
-  const handleLogout=()=>{storeSession(null);setAuth(null);setPage("dashboard");};
+  const handleLogout=()=>{storeSession(null);setAuth(null);setPage("dashboard");setLeads([]);};
   const handleOnboardDone=()=>{setLs("onboard_done",true);setShowOnboard(false);};
   const handleLeadsFound=(l)=>{setLeads(l);setPage("leads");setCredits(c=>Math.max(0,c-1));};
   const handleStatus=(id,status)=>setLeads(prev=>prev.map(l=>l.id===id?{...l,status}:l));
@@ -751,19 +859,30 @@ function App() {
   const handlePlan=(p)=>{setPlan(p);setCredits(PLANS.find(x=>x.id===p)?.credits||50);setPage("dashboard");};
 
   if(!auth) return <AuthScreen onAuth={handleAuth}/>;
-  if(page==="plans") return <div className="min-h-screen bg-[#0f0f1a] max-w-lg mx-auto"><PlansScreen currentPlan={plan} onSelect={handlePlan} onBack={()=>setPage("profile")}/></div>;
+  if(page==="plans") return (
+    <div className="min-h-screen bg-[#0f0f1a] max-w-lg mx-auto">
+      <PlansScreen currentPlan={plan} onSelect={handlePlan} onBack={()=>setPage("profile")}/>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#0f0f1a] max-w-lg mx-auto relative">
-      <div className="fixed inset-0 pointer-events-none"><div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl"/><div className="absolute bottom-20 right-0 w-64 h-64 bg-purple-600/10 rounded-full blur-3xl"/></div>
+    <div className="min-h-screen bg-[#0f0f1a]">
+      <div className="fixed inset-0 pointer-events-none"><div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-96 bg-indigo-600/10 rounded-full blur-3xl"/><div className="absolute bottom-20 right-0 w-64 h-64 bg-purple-600/10 rounded-full blur-3xl"/></div>
       {showOnboard&&<OnboardingModal onDone={handleOnboardDone}/>}
-      <div className="relative z-10">
-        {page==="dashboard"&&<Dashboard leads={leads} user={auth.user} plan={plan} credits={credits} onNavigate={setPage}/>}
-        {page==="search"&&<SearchPage onLeadsFound={handleLeadsFound} plan={plan}/>}
-        {page==="leads"&&<LeadsPage leads={leads} onStatusChange={handleStatus} onUpdateLead={handleUpdateLead}/>}
-        {page==="crm"&&<CRMPage leads={leads} onStatusChange={handleStatus} onUpdateLead={handleUpdateLead}/>}
-        {page==="profile"&&<ProfilePage user={auth.user} plan={plan} credits={credits} onNavigate={setPage} onLogout={handleLogout}/>}
+
+      {/* Desktop layout */}
+      <div className="desktop-shell">
+        <DesktopSidebar active={page} onChange={setPage} plan={plan} user={auth.user}/>
+        <div className="desktop-content relative z-10">
+          {page==="dashboard"&&<Dashboard leads={leads} user={auth.user} plan={plan} credits={credits} onNavigate={setPage}/>}
+          {page==="search"&&<SearchPage onLeadsFound={handleLeadsFound} plan={plan}/>}
+          {page==="leads"&&<LeadsPage leads={leads} onStatusChange={handleStatus} onUpdateLead={handleUpdateLead}/>}
+          {page==="crm"&&<CRMPage leads={leads} onStatusChange={handleStatus} onUpdateLead={handleUpdateLead}/>}
+          {page==="profile"&&<ProfilePage user={auth.user} plan={plan} credits={credits} onNavigate={setPage} onLogout={handleLogout}/>}
+        </div>
       </div>
+
+      {/* Mobile bottom nav */}
       <BottomNav active={page} onChange={setPage}/>
     </div>
   );
