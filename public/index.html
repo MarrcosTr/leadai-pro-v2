@@ -135,7 +135,6 @@ async function sbFetch(path,opts={}) {
 }
 
 // ─── DADOS ────────────────────────────────────────────────────
-// CORREÇÃO: MOCK_LEADS removidos do estado inicial — app começa com lista vazia
 const PLANS = [
   { id:"free",    label:"Free",    price:0,   maxLeads:10,  maxDisparos:3,   credits:50,  features:["10 leads/mês","3 disparos/mês","Score de IA básico","Suporte por email"], cta:"Plano Atual", badge:null, color:"gray" },
   { id:"starter", label:"Starter", price:67,  maxLeads:100, maxDisparos:50,  credits:100, features:["100 leads/mês","50 disparos/mês","Score de IA completo","Mensagem personalizada por IA","CRM completo","Suporte prioritário"], cta:"Assinar por R$ 67/mês", badge:"Mais popular 🔥", color:"indigo" },
@@ -153,7 +152,7 @@ const ONBOARD_STEPS = [
   { icon:"🤖", title:"Bem-vindo ao LeadAI Pro!", sub:"Prospecção inteligente com Inteligência Artificial", body:"Encontre leads qualificados, analise o potencial de cada um com IA e envie mensagens personalizadas — tudo num único app.", color:"from-indigo-500 to-purple-600" },
   { icon:"🔍", title:"Extraia leads do Google Maps", sub:"Nicho + cidade + filtros = lista limpa", body:"Defina o segmento, a cidade, a nota mínima e o número de avaliações. O app busca, filtra e entrega os leads prontos para abordagem.", color:"from-blue-500 to-cyan-500" },
   { icon:"🧠", title:"Score de Oportunidade por IA", sub:"Saiba quem está pronto para comprar", body:"Nossa IA lê as avaliações reais do Google Maps, detecta as dores dos clientes e gera uma pontuação de 0-100.", color:"from-purple-500 to-pink-500" },
-  { icon:"💬", title:"Mensagem personalizada por IA", sub:"Parece escrita à mão, não spam", body:"A IA cria uma abordagem única para cada lead baseada nas avaliações reais. \"Vi que clientes comentaram sobre X no seu negócio...\"", color:"from-green-500 to-teal-500" },
+  { icon:"💬", title:"Mensagem personalizada por IA", sub:"Parece escrita à mão, não spam", body:"A IA cria uma abordagem única para cada lead baseada nas avaliações reais.", color:"from-green-500 to-teal-500" },
   { icon:"📊", title:"Mini-CRM com funil integrado", sub:"Nunca deixe um lead esfriar", body:"Acompanhe cada lead no funil: Enviado → Respondeu → Fechou. Tudo no celular, de qualquer lugar.", color:"from-orange-500 to-red-500" },
 ];
 
@@ -218,7 +217,6 @@ const TIPS = {
   search: { icon:"💡", title:"Dica de extração", text:"Nichos com nota entre 3.0 e 4.0 têm mais dores ativas para resolver — são os leads mais quentes!", dismiss:"tip_search" },
   leads:  { icon:"🎯", title:"Dica de abordagem", text:"Ordene por Score de IA e comece pelos leads acima de 80. A chance de resposta é 3x maior.", dismiss:"tip_leads" },
   crm:    { icon:"📊", title:"Dica do funil", text:"Leads em 'Enviado' há mais de 2 dias precisam de follow-up. Um segundo contato aumenta a resposta em até 60%.", dismiss:"tip_crm" },
-  profile:{ icon:"🔑", title:"Configure as APIs", text:"Adicione sua chave Gemini (grátis em aistudio.google.com) e SerpAPI para ativar a busca real.", dismiss:"tip_profile" },
 };
 function TipBox({ page }) {
   const tip=TIPS[page];
@@ -422,6 +420,18 @@ function AuthScreen({ onAuth }) {
   const [error,setError]=useState("");
   const [success,setSuccess]=useState("");
 
+  // Verifica se voltou de pagamento aprovado
+  useEffect(()=>{
+    const params=new URLSearchParams(window.location.search);
+    if(params.get("payment")==="success"){
+      const plan=params.get("plan");
+      const email=params.get("email");
+      if(email) setEmail(email);
+      setSuccess(`✅ Pagamento confirmado! Faça login para acessar o plano ${plan==="pro"?"Pro":"Starter"}.`);
+      window.history.replaceState({},"","/");
+    }
+  },[]);
+
   const submit=async()=>{
     setError("");setSuccess("");
     if(!email||(!password&&mode!=="forgot")){setError("Preencha todos os campos");return;}
@@ -472,11 +482,98 @@ function AuthScreen({ onAuth }) {
   );
 }
 
+// ─── CHECKOUT MODAL ───────────────────────────────────────────
+function CheckoutModal({ plan, userEmail, userName, onClose, onSuccess }) {
+  const [step, setStep] = useState("form"); // form | processing | redirect
+  const [name, setName] = useState(userName || "");
+  const [email, setEmail] = useState(userEmail || "");
+  const [cpf, setCpf] = useState("");
+  const [error, setError] = useState("");
+  const [payUrl, setPayUrl] = useState("");
+
+  const planInfo = PLANS.find(p => p.id === plan);
+
+  const handlePay = async () => {
+    if (!name || !email) { setError("Nome e email são obrigatórios"); return; }
+    setStep("processing");
+    setError("");
+    try {
+      const res = await fetch("/api/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId: plan, customerName: name, customerEmail: email, customerCpfCnpj: cpf || null })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setPayUrl(data.paymentUrl);
+      setStep("redirect");
+      // Abre link de pagamento automaticamente
+      window.open(data.paymentUrl, "_blank");
+    } catch(e) {
+      setError(e.message);
+      setStep("form");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-md fade-in" onClick={onClose}>
+      <div className="glass-dark w-full max-w-sm rounded-3xl border border-white/10 overflow-hidden slide-up" onClick={e=>e.stopPropagation()}>
+        {/* Header */}
+        <div className={`p-5 ${plan==="pro"?"gradient-gold":"gradient-btn"}`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-white/70 uppercase tracking-wide font-semibold">Assinar plano</p>
+              <h2 className="text-xl font-black text-white">{planInfo?.label} — R$ {planInfo?.price}/mês</h2>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-all">✕</button>
+          </div>
+          <div className="flex flex-wrap gap-2 mt-3">
+            {[{icon:"💳",label:"Cartão em até 6x"},{icon:"⚡",label:"Pix instantâneo"},{icon:"📄",label:"Boleto bancário"}].map(m=>(
+              <span key={m.label} className="text-xs bg-white/20 text-white px-2.5 py-1 rounded-full font-medium">{m.icon} {m.label}</span>
+            ))}
+          </div>
+        </div>
+
+        {step === "form" && (
+          <div className="p-5 space-y-3">
+            <div><label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">Nome completo *</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="Seu nome" className="w-full glass rounded-xl px-4 py-3 text-sm outline-none border border-white/10 focus:border-indigo-500"/></div>
+            <div><label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">Email *</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="seu@email.com" className="w-full glass rounded-xl px-4 py-3 text-sm outline-none border border-white/10 focus:border-indigo-500"/></div>
+            <div><label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">CPF/CNPJ (opcional — necessário para boleto)</label><input value={cpf} onChange={e=>setCpf(e.target.value)} placeholder="000.000.000-00" className="w-full glass rounded-xl px-4 py-3 text-sm outline-none border border-white/10 focus:border-indigo-500"/></div>
+            {error && <div className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</div>}
+            <div className="glass rounded-xl p-3 border border-white/5">
+              <p className="text-xs text-gray-400 leading-relaxed">🔒 Pagamento 100% seguro via <strong className="text-white">Asaas</strong>. Seus dados são criptografados. Cancele quando quiser.</p>
+            </div>
+            <button onClick={handlePay} className={`w-full rounded-2xl py-4 font-bold text-white text-sm flex items-center justify-center gap-2 transition-all ${plan==="pro"?"gradient-gold glow-gold":"gradient-btn glow"}`}>
+              💳 Ir para o Pagamento — R$ {planInfo?.price}/mês
+            </button>
+            <p className="text-[10px] text-gray-600 text-center">Assinatura mensal recorrente. Cancele quando quiser.</p>
+          </div>
+        )}
+
+        {step === "processing" && (
+          <div className="p-8 text-center">
+            <Spinner/>
+            <p className="text-sm text-gray-300 mt-4">Preparando seu pagamento seguro...</p>
+          </div>
+        )}
+
+        {step === "redirect" && (
+          <div className="p-6 text-center">
+            <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 border border-green-500/30">✅</div>
+            <h3 className="font-bold text-lg mb-2">Página de pagamento aberta!</h3>
+            <p className="text-gray-400 text-sm mb-4">Uma nova aba foi aberta com sua página de pagamento segura. Após pagar, seu plano será ativado automaticamente.</p>
+            <a href={payUrl} target="_blank" rel="noreferrer" className="w-full block gradient-btn rounded-xl py-3 font-bold text-white text-sm text-center mb-3">🔗 Abrir novamente</a>
+            <button onClick={onClose} className="w-full glass rounded-xl py-3 text-gray-400 text-sm border border-white/10">Fechar</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── PLANS SCREEN ─────────────────────────────────────────────
-function PlansScreen({ currentPlan, onSelect, onBack }) {
-  const [loading,setLoading]=useState(null);
+function PlansScreen({ currentPlan, userEmail, userName, onBack, onCheckout }) {
   const [annual,setAnnual]=useState(false);
-  const select=async(plan)=>{if(plan.id==="free"||plan.id===currentPlan)return;setLoading(plan.id);await new Promise(r=>setTimeout(r,1500));onSelect(plan.id);setLoading(null);};
   return (
     <div className="min-h-screen bg-[#0f0f1a] pb-10 fade-in">
       <div className="sticky top-0 z-20 glass border-b border-white/10 px-4 py-3 flex items-center gap-3">
@@ -491,7 +588,8 @@ function PlansScreen({ currentPlan, onSelect, onBack }) {
         </div>
         <div className="space-y-4">
           {PLANS.map(plan=>{
-            const isCurrent=plan.id===currentPlan,price=annual&&plan.price>0?Math.round(plan.price*10*.8/12):plan.price,isLoad=loading===plan.id;
+            const isCurrent=plan.id===currentPlan;
+            const price=annual&&plan.price>0?Math.round(plan.price*10*.8/12):plan.price;
             return (
               <div key={plan.id} className={`glass rounded-3xl overflow-hidden border transition-all ${plan.id==="starter"?'border-indigo-500/60 glow':isCurrent?'border-green-500/40':'border-white/10'}`}>
                 {plan.badge&&<div className={`px-4 py-2 text-xs font-bold text-center ${plan.id==="pro"?'gradient-gold':'gradient-btn'} text-white`}>{plan.badge}</div>}
@@ -501,11 +599,18 @@ function PlansScreen({ currentPlan, onSelect, onBack }) {
                     <div className="text-right"><p className="text-2xl font-black text-indigo-400">{plan.maxLeads.toLocaleString()}</p><p className="text-xs text-gray-500">leads/mês</p></div>
                   </div>
                   <ul className="space-y-2 mb-4">{plan.features.map(f=><li key={f} className="flex items-start gap-2 text-sm text-gray-300"><span className="text-green-400 flex-shrink-0 mt-0.5">✓</span>{f}</li>)}</ul>
-                  <button onClick={()=>select(plan)} disabled={isCurrent||isLoad} className={`w-full rounded-2xl py-3.5 font-bold text-sm flex items-center justify-center gap-2 transition-all ${isCurrent?'bg-green-600/20 text-green-400 border border-green-500/30 cursor-default':plan.id==="pro"?'gradient-gold text-white glow-gold':plan.id==="starter"?'gradient-btn text-white glow':'glass border border-white/10 text-gray-400'}`}>{isLoad?<><Spinner/> Processando...</>:isCurrent?'✅ Plano Atual':plan.cta}</button>
+                  <button
+                    onClick={()=>{if(plan.id!=="free"&&!isCurrent) onCheckout(plan.id);}}
+                    disabled={isCurrent||plan.id==="free"}
+                    className={`w-full rounded-2xl py-3.5 font-bold text-sm flex items-center justify-center gap-2 transition-all ${isCurrent?'bg-green-600/20 text-green-400 border border-green-500/30 cursor-default':plan.id==="pro"?'gradient-gold text-white glow-gold':plan.id==="starter"?'gradient-btn text-white glow':'glass border border-white/10 text-gray-400 cursor-default'}`}
+                  >{isCurrent?'✅ Plano Atual':plan.id==="free"?'Plano gratuito':plan.cta}</button>
                 </div>
               </div>
             );
           })}
+        </div>
+        <div className="mt-6 glass rounded-2xl p-4 border border-white/5">
+          <p className="text-xs text-gray-400 text-center leading-relaxed">🔒 Pagamento seguro via <strong className="text-white">Asaas</strong> · Pix, Cartão ou Boleto · Cancele quando quiser · Suporte em português</p>
         </div>
       </div>
     </div>
@@ -568,35 +673,30 @@ function Dashboard({ leads, user, plan, onNavigate, credits }) {
 }
 
 // ─── SEARCH PAGE ──────────────────────────────────────────────
-function SearchPage({ onLeadsFound, plan }) {
-  const [form,setForm]=useState({niche:"",city:"",radius:"10",minRating:"3.5",minReviews:"20",hasWebsite:"any"});
+function SearchPage({ onLeadsFound, plan, onNeedUpgrade }) {
+  const [form,setForm]=useState({niche:"",city:"",radius:"10",minRating:"3.5",minReviews:"20"});
   const [loading,setLoading]=useState(false);
   const [step,setStep]=useState("");
   const [done,setDone]=useState(false);
   const [resultCount,setResultCount]=useState(0);
   const [errorMsg,setErrorMsg]=useState("");
   const niches=["Clínica de Estética","Salão de Beleza","Restaurante","Academia","Farmácia","Odontologia","Advocacia","Contabilidade","Auto Peças","Petshop","Dentista","Mecânica"];
+  const planInfo=PLANS.find(p=>p.id===plan)||PLANS[0];
 
   const run=async()=>{
     if(!form.niche||!form.city){alert("Preencha nicho e cidade!");return;}
-    const serpKey=getLs("cfg_serpKey","");
-    const geminiKey=getLs("cfg_geminiKey","");
-    if(!serpKey||!geminiKey){alert("Configure suas chaves de API em Perfil → Configurações!\n\nVocê precisa de:\n• SerpAPI Key (serpapi.com — 100 buscas grátis)\n• Gemini API Key (aistudio.google.com — grátis)");return;}
-
     setLoading(true);setDone(false);setErrorMsg("");
     const steps=["🔍 Buscando no Google Maps...","✅ Estabelecimentos encontrados","🧹 Filtrando por critérios...","📱 Validando dados...","🤖 IA analisando avaliações...","✨ Gerando scores de oportunidade..."];
     let si=0;
     setStep(steps[si]);
     const stepInterval=setInterval(()=>{si=Math.min(si+1,steps.length-1);setStep(steps[si]);},900);
-
     try {
       const resp=await fetch("/api/search",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({niche:form.niche,city:form.city,minRating:form.minRating,minReviews:form.minReviews,serpKey,geminiKey})
+        body:JSON.stringify({niche:form.niche,city:form.city,minRating:form.minRating,minReviews:form.minReviews,plan})
       });
       clearInterval(stepInterval);
-
       const contentType=resp.headers.get("content-type")||"";
       if(!contentType.includes("application/json")){
         const text=await resp.text();
@@ -604,10 +704,7 @@ function SearchPage({ onLeadsFound, plan }) {
       }
       const result=await resp.json();
       if(result.error) throw new Error(result.error);
-      if(!result.leads||result.leads.length===0){
-        setErrorMsg("Nenhum lead encontrado com esses filtros. Tente aumentar o raio ou diminuir os filtros de nota/avaliações.");
-        setLoading(false);return;
-      }
+      if(!result.leads||result.leads.length===0){setErrorMsg("Nenhum lead encontrado. Tente aumentar o raio ou diminuir os filtros.");setLoading(false);return;}
       setResultCount(result.leads.length);
       onLeadsFound(result.leads);
       setDone(true);
@@ -620,8 +717,8 @@ function SearchPage({ onLeadsFound, plan }) {
 
   return (
     <div className="pb-24 slide-in">
-      <div className="px-4 pt-6 pb-2"><h1 className="text-xl font-bold gradient-text">🔍 Extrair Leads</h1><p className="text-gray-400 text-sm">Configure e deixa a IA trabalhar</p></div>
-      <div className="mt-2"><TipBox page="search"/></div>
+      <div className="px-4 pt-6 pb-2"><h1 className="text-xl font-bold gradient-text">🔍 Extrair Leads</h1><p className="text-gray-400 text-sm">Configure e deixa a IA trabalhar · Limite: {planInfo.maxLeads} leads/busca</p></div>
+      <TipBox page="search"/>
       <div className="px-4 space-y-4">
         <div>
           <label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">NICHO *</label>
@@ -633,12 +730,18 @@ function SearchPage({ onLeadsFound, plan }) {
           <input value={form.city} onChange={e=>setForm({...form,city:e.target.value})} placeholder="Ex: São Paulo, Campinas, Sumaré..." className="w-full glass rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-500 border border-white/10"/>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          {[["radius","RAIO (KM)",["5","10","20","50"].map(v=>({v,l:`${v} km`}))],["minRating","NOTA MÍNIMA ★",["2","2.5","3","3.5","4","4.5"].map(v=>({v,l:`≥ ${v}`}))],["minReviews","MIN. AVALIAÇÕES",["10","20","50","100"].map(v=>({v,l:`≥ ${v}`}))],["hasWebsite","TEM SITE?",[{v:"any",l:"Qualquer"},{v:"no",l:"Sem site 🎯"},{v:"yes",l:"Com site"}]]].map(([key,label,opts])=>(
+          {[["radius","RAIO (KM)",["5","10","20","50"].map(v=>({v,l:`${v} km`}))],["minRating","NOTA MÍNIMA ★",["2","2.5","3","3.5","4","4.5"].map(v=>({v,l:`≥ ${v}`}))],["minReviews","MIN. AVALIAÇÕES",["10","20","50","100"].map(v=>({v,l:`≥ ${v}`}))]].map(([key,label,opts])=>(
             <div key={key}><label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">{label}</label><select value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} className="w-full glass rounded-xl px-3 py-3 text-sm outline-none border border-white/10 bg-transparent">{opts.map(({v,l})=><option key={v} value={v}>{l}</option>)}</select></div>
           ))}
         </div>
+        {plan==="free"&&(
+          <div className="glass rounded-xl p-3 border border-yellow-500/20 flex items-start gap-2">
+            <span className="text-lg">⚠️</span>
+            <div className="flex-1"><p className="text-xs text-yellow-300 font-semibold">Plano Free — máximo 10 leads</p><button onClick={onNeedUpgrade} className="text-xs text-indigo-400 mt-0.5">Fazer upgrade para mais leads →</button></div>
+          </div>
+        )}
         {loading&&<div className="glass rounded-2xl p-4 border border-indigo-500/30"><div className="flex items-center gap-3 mb-2"><Spinner/><p className="text-sm text-indigo-300">{step}</p></div><div className="h-1.5 bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full animate-pulse" style={{width:"70%"}}/></div></div>}
-        {errorMsg&&<div className="glass rounded-2xl p-4 border border-red-500/30"><p className="text-red-400 font-semibold text-sm">❌ {errorMsg}</p><p className="text-gray-500 text-xs mt-1">Verifique suas chaves em Perfil → Configurações</p></div>}
+        {errorMsg&&<div className="glass rounded-2xl p-4 border border-red-500/30"><p className="text-red-400 font-semibold text-sm">❌ {errorMsg}</p><p className="text-gray-500 text-xs mt-1">Verifique se as chaves SERP_API_KEY e GEMINI_API_KEY estão configuradas no Vercel</p></div>}
         {done&&<div className="glass rounded-2xl p-4 border border-green-500/30 glow-green"><p className="text-green-400 font-semibold">✅ {resultCount} leads extraídos e analisados!</p><p className="text-gray-400 text-xs mt-1">Veja os resultados na aba Leads</p></div>}
         <button onClick={run} disabled={loading} className="w-full gradient-btn rounded-2xl py-4 font-bold text-white glow flex items-center justify-center gap-2 disabled:opacity-50">
           {loading?<><Spinner/> Processando...</>:<><span>🚀</span> Extrair e Analisar com IA</>}
@@ -676,17 +779,12 @@ function LeadsPage({ leads, onStatusChange, onUpdateLead }) {
                 <p className="text-gray-400 text-xs">{l.segment} · {l.city}</p>
                 <div className="flex items-center gap-3 mt-1"><span className="text-xs text-yellow-400">⭐ {l.rating}</span><span className="text-xs text-gray-500">{l.review_count} aval.</span><span className={`text-xs ${l.has_whatsapp?"text-green-400":"text-red-400"}`}>{l.has_whatsapp?"✓ WA":"✗ WA"}</span></div>
                 {(l.pain_points||[]).length>0&&(l.pain_points[0]!=="análise indisponível")&&<div className="mt-1.5"><Badge text={`🎯 ${l.pain_points[0]}`} color="red"/></div>}
-                {(l.history||[]).length>0&&<div className="flex items-center gap-1 mt-2 overflow-hidden">{[...l.history].slice(-3).map((h,i)=>{const m=HISTORY_META[h.type]||HISTORY_META.note;return <span key={i} className={`text-xs px-1.5 py-0.5 rounded ${m.bg}`} title={h.label}>{m.icon}</span>;})}{l.history.length>3&&<span className="text-xs text-gray-600">+{l.history.length-3}</span>}</div>}
               </div>
             </div>
           </div>
         ))}
         {filtered.length===0&&(
-          <div className="text-center text-gray-500 py-12">
-            <p className="text-3xl mb-2">📭</p>
-            <p>Nenhum lead encontrado</p>
-            <p className="text-xs mt-1">Faça uma busca na aba Buscar</p>
-          </div>
+          <div className="text-center text-gray-500 py-12"><p className="text-3xl mb-2">📭</p><p>Nenhum lead encontrado</p><p className="text-xs mt-1">Faça uma busca na aba Buscar</p></div>
         )}
       </div>
       {selectedLead&&<LeadModal lead={selectedLead} onClose={()=>setSelected(null)} onStatusChange={onStatusChange} onUpdateLead={onUpdateLead}/>}
@@ -731,52 +829,30 @@ function CRMPage({ leads, onStatusChange, onUpdateLead }) {
 
 // ─── PROFILE PAGE ─────────────────────────────────────────────
 function ProfilePage({ user, plan, credits, onNavigate, onLogout }) {
-  const [cfg,setCfg]=useState({geminiKey:getLs("cfg_geminiKey",""),serpKey:getLs("cfg_serpKey",""),wahaUrl:getLs("cfg_wahaUrl",""),produto:getLs("cfg_produto",""),nicho:getLs("cfg_nicho",""),followup:getLs("cfg_followup","2")});
   const [saved,setSaved]=useState(false);
   const name=user?.user_metadata?.full_name||user?.email?.split("@")[0]||"Usuário";
   const planInfo=PLANS.find(p=>p.id===plan)||PLANS[0];
-  const save=()=>{
-    setLs("cfg_geminiKey",cfg.geminiKey);
-    setLs("cfg_serpKey",cfg.serpKey);
-    setLs("cfg_wahaUrl",cfg.wahaUrl);
-    setLs("cfg_produto",cfg.produto);
-    setLs("cfg_nicho",cfg.nicho);
-    setLs("cfg_followup",cfg.followup);
-    setSaved(true);
-    setTimeout(()=>setSaved(false),2000);
-  };
   return (
     <div className="pb-24 slide-in">
       <div className="px-4 pt-6 pb-4">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 gradient-btn rounded-full flex items-center justify-center text-2xl glow">{name[0]?.toUpperCase()||"U"}</div>
-          <div><p className="font-bold text-lg">{name}</p><p className="text-gray-400 text-sm">{user?.email}</p><button onClick={()=>onNavigate("plans")} className={`mt-1 text-xs px-3 py-1 rounded-full border font-semibold ${plan==="pro"?'border-yellow-500/50 text-yellow-400 bg-yellow-500/10':plan==="starter"?'border-indigo-500/50 text-indigo-300 bg-indigo-500/10':'border-white/10 text-gray-400'}`}>{plan==="pro"?"⚡ Pro":plan==="starter"?"🚀 Starter":"Free — Upgrade"}</button></div>
+          <div><p className="font-bold text-lg">{name}</p><p className="text-gray-400 text-sm">{user?.email}</p><button onClick={()=>onNavigate("plans")} className={`mt-1 text-xs px-3 py-1 rounded-full border font-semibold ${plan==="pro"?'border-yellow-500/50 text-yellow-400 bg-yellow-500/10':plan==="starter"?'border-indigo-500/50 text-indigo-300 bg-indigo-500/10':'border-white/10 text-gray-400'}`}>{plan==="pro"?"⚡ Pro":plan==="starter"?"🚀 Starter":"Free — Fazer Upgrade"}</button></div>
         </div>
       </div>
-      <TipBox page="profile"/>
       <div className="px-4 space-y-4">
         <div className="glass rounded-2xl p-4 border border-indigo-500/20">
           <div className="flex justify-between items-center mb-2"><p className="font-semibold text-sm">Créditos restantes</p><p className="text-indigo-300 font-bold">{credits}/{planInfo.credits}</p></div>
           <div className="h-2 bg-white/10 rounded-full overflow-hidden mb-2"><div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500" style={{width:`${Math.min(100,Math.round(credits/planInfo.credits*100))}%`}}/></div>
           <button onClick={()=>onNavigate("plans")} className="text-xs text-indigo-400">↑ Aumentar limite</button>
         </div>
-        <div className="glass rounded-2xl p-4">
-          <p className="font-bold text-sm mb-4 gradient-text">🔑 Chaves de API</p>
-          <div className="space-y-3">
-            {[["geminiKey","Gemini API Key (IA — grátis)","AIza...","aistudio.google.com"],["serpKey","SerpAPI Key (extração Maps)","sua-chave-serpapi","serpapi.com — 100 buscas grátis/mês"],["wahaUrl","WAHA URL (WhatsApp opcional)","https://meu-waha.railway.app","waha.devlike.pro"]].map(([k,l,ph,hint])=>(
-              <div key={k}><label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">{l}</label><input type="password" value={cfg[k]} onChange={e=>setCfg({...cfg,[k]:e.target.value})} placeholder={ph} className="w-full glass rounded-xl px-4 py-2.5 text-sm outline-none border border-white/10 focus:border-indigo-500"/><p className="text-xs text-gray-600 mt-0.5">{hint}</p></div>
-            ))}
-          </div>
+
+        <div className="glass rounded-2xl p-4 border border-white/5">
+          <p className="font-bold text-sm mb-3 gradient-text">ℹ️ Sobre as Chaves de API</p>
+          <p className="text-xs text-gray-400 leading-relaxed">As chaves <strong className="text-white">SerpAPI</strong> e <strong className="text-white">Gemini</strong> são configuradas pelo administrador no servidor. Você não precisa inserir nada — é tudo automático! 🎉</p>
+          <p className="text-xs text-gray-500 mt-2">Plano atual: <strong className="text-indigo-300">{planInfo.label}</strong> · Limite: {planInfo.maxLeads} leads/busca</p>
         </div>
-        <div className="glass rounded-2xl p-4">
-          <p className="font-bold text-sm mb-4 gradient-text">🤖 Personalização da IA</p>
-          <div className="space-y-3">
-            <div><label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">Meu produto / solução</label><input value={cfg.produto} onChange={e=>setCfg({...cfg,produto:e.target.value})} placeholder="Ex: sistema de agendamento online..." className="w-full glass rounded-xl px-4 py-2.5 text-sm outline-none border border-white/10 focus:border-indigo-500"/></div>
-            <div><label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">Nicho alvo</label><input value={cfg.nicho} onChange={e=>setCfg({...cfg,nicho:e.target.value})} placeholder="Ex: clínicas, salões..." className="w-full glass rounded-xl px-4 py-2.5 text-sm outline-none border border-white/10 focus:border-indigo-500"/></div>
-            <div><label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">Dias até follow-up</label><select value={cfg.followup} onChange={e=>setCfg({...cfg,followup:e.target.value})} className="w-full glass rounded-xl px-4 py-2.5 text-sm outline-none border border-white/10 bg-transparent">{["1","2","3","5","7"].map(v=><option key={v} value={v}>{v} dias</option>)}</select></div>
-          </div>
-        </div>
-        <button onClick={save} className={`w-full rounded-2xl py-3.5 font-bold flex items-center justify-center gap-2 transition-all ${saved?'bg-green-600 glow-green':'gradient-btn glow'}`}>{saved?"✅ Salvo!":"💾 Salvar Configurações"}</button>
+
         {plan!=="pro"&&<button onClick={()=>onNavigate("plans")} className="w-full gradient-gold rounded-2xl py-3.5 font-bold text-white glow-gold flex items-center justify-center gap-2">⚡ Fazer Upgrade de Plano</button>}
         <button onClick={onLogout} className="w-full glass rounded-2xl py-3 text-gray-400 border border-white/10 hover:border-red-500/30 hover:text-red-400 transition-all text-sm flex items-center justify-center gap-2">🚪 Sair da conta</button>
       </div>
@@ -787,7 +863,7 @@ function ProfilePage({ user, plan, credits, onNavigate, onLogout }) {
 // ─── DESKTOP SIDEBAR ──────────────────────────────────────────
 function DesktopSidebar({ active, onChange, plan, user }) {
   const name=user?.user_metadata?.full_name||user?.email?.split("@")[0]||"Usuário";
-  const tabs=[{id:"dashboard",icon:"🏠",label:"Início"},{id:"search",icon:"🔍",label:"Buscar Leads"},{id:"leads",icon:"📋",label:"Meus Leads"},{id:"crm",icon:"📊",label:"Funil CRM"},{id:"profile",icon:"👤",label:"Perfil & APIs"}];
+  const tabs=[{id:"dashboard",icon:"🏠",label:"Início"},{id:"search",icon:"🔍",label:"Buscar Leads"},{id:"leads",icon:"📋",label:"Meus Leads"},{id:"crm",icon:"📊",label:"Funil CRM"},{id:"profile",icon:"👤",label:"Perfil"}];
   return (
     <div className="desktop-sidebar">
       <div className="desktop-sidebar-logo">
@@ -834,11 +910,11 @@ function BottomNav({ active, onChange }) {
 function App() {
   const [auth,setAuth]=useState(null);
   const [page,setPage]=useState("dashboard");
-  // CORREÇÃO: começa com lista vazia, não com MOCK_LEADS
   const [leads,setLeads]=useState([]);
   const [plan,setPlan]=useState("free");
   const [credits,setCredits]=useState(50);
   const [showOnboard,setShowOnboard]=useState(false);
+  const [checkoutPlan,setCheckoutPlan]=useState(null); // qual plano está sendo comprado
 
   useEffect(()=>{
     const s=getStoredSession();
@@ -856,12 +932,31 @@ function App() {
   const handleLeadsFound=(l)=>{setLeads(l);setPage("leads");setCredits(c=>Math.max(0,c-1));};
   const handleStatus=(id,status)=>setLeads(prev=>prev.map(l=>l.id===id?{...l,status}:l));
   const handleUpdateLead=(id,updates)=>setLeads(prev=>prev.map(l=>l.id===id?{...l,...updates}:l));
-  const handlePlan=(p)=>{setPlan(p);setCredits(PLANS.find(x=>x.id===p)?.credits||50);setPage("dashboard");};
+
+  // Abre checkout modal para o plano escolhido
+  const handleCheckout=(planId)=>{setCheckoutPlan(planId);};
+  const handleCheckoutClose=()=>setCheckoutPlan(null);
 
   if(!auth) return <AuthScreen onAuth={handleAuth}/>;
+
   if(page==="plans") return (
     <div className="min-h-screen bg-[#0f0f1a] max-w-lg mx-auto">
-      <PlansScreen currentPlan={plan} onSelect={handlePlan} onBack={()=>setPage("profile")}/>
+      <PlansScreen
+        currentPlan={plan}
+        userEmail={auth.user?.email}
+        userName={auth.user?.user_metadata?.full_name}
+        onBack={()=>setPage("dashboard")}
+        onCheckout={handleCheckout}
+      />
+      {checkoutPlan&&(
+        <CheckoutModal
+          plan={checkoutPlan}
+          userEmail={auth.user?.email}
+          userName={auth.user?.user_metadata?.full_name}
+          onClose={handleCheckoutClose}
+          onSuccess={(p)=>{setPlan(p);setCredits(PLANS.find(x=>x.id===p)?.credits||50);setCheckoutPlan(null);setPage("dashboard");}}
+        />
+      )}
     </div>
   );
 
@@ -869,20 +964,27 @@ function App() {
     <div className="min-h-screen bg-[#0f0f1a]">
       <div className="fixed inset-0 pointer-events-none"><div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-96 bg-indigo-600/10 rounded-full blur-3xl"/><div className="absolute bottom-20 right-0 w-64 h-64 bg-purple-600/10 rounded-full blur-3xl"/></div>
       {showOnboard&&<OnboardingModal onDone={handleOnboardDone}/>}
+      {checkoutPlan&&(
+        <CheckoutModal
+          plan={checkoutPlan}
+          userEmail={auth.user?.email}
+          userName={auth.user?.user_metadata?.full_name}
+          onClose={handleCheckoutClose}
+          onSuccess={(p)=>{setPlan(p);setCredits(PLANS.find(x=>x.id===p)?.credits||50);setCheckoutPlan(null);}}
+        />
+      )}
 
-      {/* Desktop layout */}
       <div className="desktop-shell">
         <DesktopSidebar active={page} onChange={setPage} plan={plan} user={auth.user}/>
         <div className="desktop-content relative z-10">
           {page==="dashboard"&&<Dashboard leads={leads} user={auth.user} plan={plan} credits={credits} onNavigate={setPage}/>}
-          {page==="search"&&<SearchPage onLeadsFound={handleLeadsFound} plan={plan}/>}
+          {page==="search"&&<SearchPage onLeadsFound={handleLeadsFound} plan={plan} onNeedUpgrade={()=>setPage("plans")}/>}
           {page==="leads"&&<LeadsPage leads={leads} onStatusChange={handleStatus} onUpdateLead={handleUpdateLead}/>}
           {page==="crm"&&<CRMPage leads={leads} onStatusChange={handleStatus} onUpdateLead={handleUpdateLead}/>}
           {page==="profile"&&<ProfilePage user={auth.user} plan={plan} credits={credits} onNavigate={setPage} onLogout={handleLogout}/>}
         </div>
       </div>
 
-      {/* Mobile bottom nav */}
       <BottomNav active={page} onChange={setPage}/>
     </div>
   );
