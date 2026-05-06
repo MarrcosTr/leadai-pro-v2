@@ -18,32 +18,32 @@ export default async function handler(req, res) {
   }
 
   const PLAN_INFO = {
-    starter: { name: "LeadAI Pro — Starter",  value: 67,  description: "100 leads/mês + IA completa" },
-    pro:     { name: "LeadAI Pro — Pro",       value: 147, description: "500 leads/mês + IA premium" },
+    starter: { name: "LeadAI Pro — Starter", value: 67,  description: "100 leads/mês + IA completa" },
+    pro:     { name: "LeadAI Pro — Pro",     value: 147, description: "500 leads/mês + IA premium" },
   };
   const plan = PLAN_INFO[planId];
   if (!plan) return res.status(400).json({ error: "Plano inválido" });
 
   try {
-    // 1. Cria ou busca cliente no Asaas
+    // 1. Busca ou cria cliente no Asaas
     let customerId = null;
 
-    // Tenta buscar cliente existente pelo email
-    const searchRes = await fetch(`${ASAAS_BASE}/customers?email=${encodeURIComponent(customerEmail)}`, {
-      headers: { "access_token": ASAAS_KEY }
-    });
+    const searchRes = await fetch(
+      `${ASAAS_BASE}/customers?email=${encodeURIComponent(customerEmail)}`,
+      { headers: { "access_token": ASAAS_KEY } }
+    );
     const searchData = await searchRes.json();
+
     if (searchData.data && searchData.data.length > 0) {
       customerId = searchData.data[0].id;
     } else {
-      // Cria novo cliente
       const createRes = await fetch(`${ASAAS_BASE}/customers`, {
         method: "POST",
         headers: { "access_token": ASAAS_KEY, "Content-Type": "application/json" },
         body: JSON.stringify({
           name: customerName || customerEmail.split("@")[0],
           email: customerEmail,
-          cpfCnpj: customerCpfCnpj || null,
+          cpfCnpj: customerCpfCnpj || undefined,
           notificationDisabled: false,
         })
       });
@@ -52,7 +52,7 @@ export default async function handler(req, res) {
       customerId = createData.id;
     }
 
-    // 2. Cria link de pagamento (paymentLink) com todos os métodos
+    // 2. Cria link de pagamento com todos os campos obrigatórios
     const linkRes = await fetch(`${ASAAS_BASE}/paymentLinks`, {
       method: "POST",
       headers: { "access_token": ASAAS_KEY, "Content-Type": "application/json" },
@@ -60,11 +60,11 @@ export default async function handler(req, res) {
         name: plan.name,
         description: plan.description,
         value: plan.value,
-        billingType: "UNDEFINED",      // Aceita Pix, cartão e boleto
-        chargeType: "RECURRENT",       // Assinatura mensal
+        billingType: "UNDEFINED",
+        chargeType: "RECURRENT",
         subscriptionCycle: "MONTHLY",
-        endDate: null,
-        maxInstallmentCount: 6,        // Até 6x no cartão
+        dueDateLimitDays: 5,
+        maxInstallmentCount: 6,
         notificationEnabled: true,
         callback: {
           successUrl: `https://leadai-pro-v2.vercel.app/?payment=success&plan=${planId}&email=${encodeURIComponent(customerEmail)}`,
@@ -72,8 +72,16 @@ export default async function handler(req, res) {
         }
       })
     });
+
     const linkData = await linkRes.json();
-    if (linkData.errors) throw new Error(linkData.errors[0]?.description || "Erro ao criar link");
+    console.log("Asaas paymentLink response:", JSON.stringify(linkData));
+
+    if (linkData.errors && linkData.errors.length > 0) {
+      throw new Error(linkData.errors[0]?.description || "Erro ao criar link de pagamento");
+    }
+    if (!linkData.url) {
+      throw new Error("Link de pagamento não retornado: " + JSON.stringify(linkData));
+    }
 
     return res.status(200).json({
       paymentUrl: linkData.url,
