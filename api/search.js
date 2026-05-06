@@ -1,4 +1,5 @@
 // api/search.js — Vercel Serverless Function
+// CHAVES DE API ficam no Vercel (Environment Variables), não no cliente
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -7,11 +8,22 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Método não permitido" });
 
-  const { niche, city, minRating, minReviews, serpKey, geminiKey } = req.body;
+  const { niche, city, minRating, minReviews, plan } = req.body;
 
-  if (!niche || !city || !serpKey || !geminiKey) {
-    return res.status(400).json({ error: "Parâmetros obrigatórios faltando" });
+  // Chaves vêm do servidor (Vercel Environment Variables)
+  const serpKey   = process.env.SERP_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
+
+  if (!niche || !city) {
+    return res.status(400).json({ error: "Nicho e cidade são obrigatórios" });
   }
+  if (!serpKey || !geminiKey) {
+    return res.status(500).json({ error: "Chaves de API não configuradas no servidor. Configure SERP_API_KEY e GEMINI_API_KEY no Vercel." });
+  }
+
+  // Limite de leads por plano
+  const PLAN_LIMITS = { free: 10, starter: 100, pro: 500 };
+  const maxLeads = PLAN_LIMITS[plan] || 10;
 
   // Modelos Gemini em ordem de tentativa
   const GEMINI_MODELS = [
@@ -21,7 +33,7 @@ export default async function handler(req, res) {
     "gemini-pro"
   ];
 
-  async function callGemini(prompt, geminiKey) {
+  async function callGemini(prompt) {
     for (const model of GEMINI_MODELS) {
       try {
         const gemRes = await fetch(
@@ -40,9 +52,7 @@ export default async function handler(req, res) {
         if (gemData.error) continue;
         const raw = gemData.candidates?.[0]?.content?.parts?.[0]?.text || "";
         if (!raw) continue;
-        // Remove markdown backticks
         const cleaned = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-        // Extrai JSON se vier com texto ao redor
         const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
         if (!jsonMatch) continue;
         const parsed = JSON.parse(jsonMatch[0]);
@@ -73,22 +83,22 @@ export default async function handler(req, res) {
     if (serpData.error) throw new Error(`SerpAPI: ${serpData.error}`);
 
     const places = (serpData.local_results || []).filter(p => {
-      const rating = parseFloat(p.rating) || 0;
-      const reviews = parseInt(p.reviews) || 0;
-      return rating >= parseFloat(minRating) && reviews >= parseInt(minReviews);
-    }).slice(0, 15);
+      const rating  = parseFloat(p.rating)  || 0;
+      const reviews = parseInt(p.reviews)   || 0;
+      return rating >= parseFloat(minRating || 3.5) && reviews >= parseInt(minReviews || 20);
+    }).slice(0, maxLeads);
 
     if (places.length === 0) {
-      return res.status(200).json({ leads: [], message: "Nenhum resultado encontrado com esses filtros." });
+      return res.status(200).json({ leads: [], message: "Nenhum resultado com esses filtros." });
     }
 
     // 2. Analisa cada lead com Gemini
     const leads = await Promise.all(places.map(async (place, idx) => {
-      const reviews = (place.reviews_data || []).slice(0, 5).map(r => r.snippet || "").filter(Boolean);
-      const reviewsText = reviews.length > 0 ? reviews.join(" | ") : "Sem avaliações detalhadas disponíveis.";
-      const snippet = place.description || place.type || "";
+      const reviews     = (place.reviews_data || []).slice(0, 5).map(r => r.snippet || "").filter(Boolean);
+      const reviewsText = reviews.length > 0 ? reviews.join(" | ") : "Sem avaliações detalhadas.";
+      const snippet     = place.description || place.type || "";
 
-      const prompt = `Você é especialista em prospecção B2B. Analise este negócio e retorne SOMENTE JSON válido, sem markdown, sem texto adicional.
+      const prompt = `Você é especialista em prospecção B2B. Analise este negócio e retorne SOMENTE JSON válido, sem markdown.
 
 Negócio: ${place.title}
 Segmento: ${niche}
@@ -97,23 +107,23 @@ Nota: ${place.rating} estrelas (${place.reviews} avaliações)
 Descrição: ${snippet}
 Avaliações recentes: ${reviewsText}
 
-JSON de resposta (exatamente este formato):
-{"ai_score":75,"score_label":"Morno ⚡","pain_points":["dor específica 1","dor específica 2","dor específica 3"],"ai_message":"Mensagem de prospecção personalizada de 2 frases mencionando uma dor real identificada nas avaliações"}
+JSON (exatamente este formato):
+{"ai_score":75,"score_label":"Morno ⚡","pain_points":["dor 1","dor 2","dor 3"],"ai_message":"Mensagem de prospecção personalizada de 2 frases mencionando uma dor real"}
 
 Regras:
-- ai_score: 80-100 = muitas dores/oportunidade clara, 60-79 = algumas oportunidades, 40-59 = poucos sinais, 0-39 = negócio bem estruturado
+- ai_score: 80-100=muitas dores/oportunidade clara, 60-79=algumas oportunidades, 40-59=poucos sinais, 0-39=negócio bem estruturado
 - score_label: "Quente 🔥" se >=80, "Morno ⚡" se >=60, "Frio ❄️" se <60
-- pain_points: dores REAIS baseadas nas avaliações, não genéricas
+- pain_points: dores REAIS baseadas nas avaliações
 - ai_message: mencione o nome do negócio e uma dor específica real`;
 
-      const aiResult = await callGemini(prompt, geminiKey);
+      const aiResult = await callGemini(prompt);
 
       if (aiResult && aiResult.ai_score !== undefined) {
         return {
           id: idx + 1,
           name: place.title || "Sem nome",
           segment: niche,
-          city: city,
+          city,
           phone: place.phone || null,
           has_whatsapp: !!place.phone,
           rating: parseFloat(place.rating) || 0,
@@ -128,12 +138,12 @@ Regras:
           ai_message: aiResult.ai_message || "",
           history: [
             { type: "extracted", label: "Lead extraído via Google Maps", ts: Date.now() },
-            { type: "ai", label: `Score de IA gerado: ${aiResult.ai_score || 50} pts`, ts: Date.now() + 1000 }
+            { type: "ai", label: `Score de IA: ${aiResult.ai_score || 50} pts`, ts: Date.now() + 1000 }
           ]
         };
       }
 
-      // Fallback se Gemini falhar completamente
+      // Fallback se Gemini falhar
       const fallbackScore = Math.round(
         (parseFloat(place.rating) <= 3.5 ? 75 : parseFloat(place.rating) <= 4.2 ? 60 : 45) +
         Math.random() * 10
@@ -142,7 +152,7 @@ Regras:
         id: idx + 1,
         name: place.title || "Sem nome",
         segment: niche,
-        city: city,
+        city,
         phone: place.phone || null,
         has_whatsapp: !!place.phone,
         rating: parseFloat(place.rating) || 0,
@@ -153,7 +163,7 @@ Regras:
         ai_score: fallbackScore,
         score_label: fallbackScore >= 80 ? "Quente 🔥" : fallbackScore >= 60 ? "Morno ⚡" : "Frio ❄️",
         pain_points: ["presença digital limitada", "atendimento pode melhorar", "captação de clientes"],
-        ai_message: `Olá, ${place.title}! Vi que vocês têm ${place.reviews} avaliações no Google Maps e acredito que posso ajudar a atrair ainda mais clientes para o seu negócio em ${city}. Posso te mostrar como em 5 minutos?`,
+        ai_message: `Olá, ${place.title}! Vi que vocês têm ${place.reviews} avaliações no Google Maps e acredito que posso ajudar a atrair ainda mais clientes em ${city}. Posso te mostrar como em 5 minutos?`,
         history: [
           { type: "extracted", label: "Lead extraído via Google Maps", ts: Date.now() }
         ]
