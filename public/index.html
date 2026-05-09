@@ -1,97 +1,1021 @@
-import React, { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-// Configuração do Supabase
-const SUPABASE_URL = 'https://ptvkywxtrzyntjirmebv.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_fJ_BlP4JTZPD3f3gFIn8FA_Jzwba6uW';
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-function App() {
-  const [session, setSession] = useState(null);
-  const [credits, setCredits] = useState(0);
-
-  useEffect(() => {
-    // Recupera a sessão do localStorage ao iniciar
-    const storedSession = JSON.parse(localStorage.getItem('leadai_session'));
-    if (storedSession) {
-      setSession(storedSession);
-      fetchCredits(storedSession); // Busca créditos no backend
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <link rel="icon" type="image/png" href="/favicon.png?v=2" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>LeadAI Pro — Prospecção Inteligente</title>
+  <meta name="theme-color" content="#6366f1"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:#0f0f1a;color:#f1f5f9}
+    ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#1e1e2e}::-webkit-scrollbar-thumb{background:#6366f1;border-radius:4px}
+    .glass{background:rgba(255,255,255,0.05);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.1)}
+    .glass-dark{background:rgba(0,0,0,0.4);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.08)}
+    .glow{box-shadow:0 0 24px rgba(99,102,241,0.35)}
+    .glow-green{box-shadow:0 0 20px rgba(34,197,94,0.3)}
+    .glow-gold{box-shadow:0 0 24px rgba(251,191,36,0.4)}
+    .gradient-text{background:linear-gradient(135deg,#6366f1,#a855f7,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .gradient-btn{background:linear-gradient(135deg,#6366f1,#a855f7);transition:all .2s}
+    .gradient-btn:hover{filter:brightness(1.15);transform:translateY(-1px)}
+    .gradient-gold{background:linear-gradient(135deg,#f59e0b,#ef4444)}
+    .gradient-teal{background:linear-gradient(135deg,#14b8a6,#6366f1)}
+    .card-hover{transition:all .2s}.card-hover:hover{transform:translateY(-2px);border-color:rgba(99,102,241,.5)!important}
+    .spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+    .pulse-dot{animation:pulse 2s infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    .slide-in{animation:slideIn .35s ease}@keyframes slideIn{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
+    .slide-up{animation:slideUp .4s cubic-bezier(.34,1.56,.64,1)}@keyframes slideUp{from{opacity:0;transform:translateY(40px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+    .fade-in{animation:fadeIn .4s ease}@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    .pop-in{animation:popIn .35s cubic-bezier(.34,1.56,.64,1)}@keyframes popIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+    .shake{animation:shake .4s}@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+    .timeline-line{position:relative}.timeline-line::before{content:'';position:absolute;left:8px;top:24px;bottom:0;width:2px;background:linear-gradient(180deg,rgba(99,102,241,.4),transparent)}
+    .tip-box{border-left:3px solid #6366f1}
+    input,select,textarea{color:#f1f5f9!important}
+    input::placeholder,textarea::placeholder{color:#6b7280!important}
+    option{background:#1e1e2e}
+    textarea{resize:none}
+    @media (min-width: 1024px) {
+      .desktop-shell{display:flex;min-height:100vh;max-width:1400px;margin:0 auto}
+      .desktop-sidebar{width:240px;flex-shrink:0;position:fixed;top:0;left:50%;transform:translateX(-700px);height:100vh;display:flex;flex-direction:column;padding:28px 16px;background:rgba(0,0,0,0.35);backdrop-filter:blur(20px);border-right:1px solid rgba(255,255,255,0.07);z-index:40}
+      .desktop-content{margin-left:240px;flex:1;max-width:860px;min-height:100vh;padding-bottom:32px}
+      .bottom-nav-mobile{display:none!important}
+      .desktop-sidebar-logo{display:flex;align-items:center;gap:10px;padding:0 8px;margin-bottom:32px}
+      .desktop-nav-item{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:14px;font-size:14px;font-weight:500;color:#6b7280;cursor:pointer;transition:all .18s;margin-bottom:4px;border:1px solid transparent;text-align:left;width:100%;background:none}
+      .desktop-nav-item:hover{color:#f1f5f9;background:rgba(99,102,241,0.08);border-color:rgba(99,102,241,0.15)}
+      .desktop-nav-item.active{color:#a5b4fc;background:rgba(99,102,241,0.18);border-color:rgba(99,102,241,0.35)}
+      .desktop-nav-item .nav-icon{font-size:18px;width:24px;text-align:center}
     }
-  }, []);
-
-  const fetchCredits = async (session) => {
-    const { data, error } = await supabase
-      .from('users') // Substitua pela tabela que armazena créditos
-      .select('credits')
-      .eq('id', session.user.id)
-      .single();
-    if (!error && data) {
-      setCredits(data.credits);
+    @media (max-width: 1023px) {
+      .desktop-sidebar{display:none!important}
+      .desktop-content{margin-left:0!important;max-width:100%!important}
     }
-  };
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-  const handleLogin = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      throw new Error(error.message);
-    }
-    localStorage.setItem('leadai_session', JSON.stringify(data));
-    setSession(data);
-    fetchCredits(data); // Recarrega créditos após login
-  };
+// ─── CONFIG ───────────────────────────────────────────────────
+const SUPABASE_URL  = "https://ptvkywxtrzyntjirmebv.supabase.co";
+const SUPABASE_ANON = "sb_publishable_fJ_BlP4JTZPD3f3gFIn8FA_Jzwba6uW";
 
-  const handleLogout = () => {
-    supabase.auth.signOut();
-    localStorage.removeItem('leadai_session');
-    setSession(null);
-    setCredits(0);
-  };
+function getStoredSession() { try { return JSON.parse(localStorage.getItem("leadai_session")||"null"); } catch { return null; } }
+function storeSession(s) { s ? localStorage.setItem("leadai_session",JSON.stringify(s)) : localStorage.removeItem("leadai_session"); }
+function getLs(k,d) { try { const v=localStorage.getItem(k); return v!=null?JSON.parse(v):d; } catch { return d; } }
+function setLs(k,v) { localStorage.setItem(k,JSON.stringify(v)); }
 
+async function sbFetch(path,opts={}) {
+  const session=getStoredSession();
+  const headers={"apikey":SUPABASE_ANON,"Content-Type":"application/json",...(session?.access_token?{"Authorization":`Bearer ${session.access_token}`}:{}),...(opts.headers||{})};
+  const res=await fetch(`${SUPABASE_URL}${path}`,{...opts,headers});
+  const text=await res.text();
+  try{return{ok:res.ok,status:res.status,data:JSON.parse(text)};}
+  catch{return{ok:res.ok,status:res.status,data:text};}
+}
+
+// ─── SUPABASE PERSISTENCE ─────────────────────────────────────
+async function saveLeadsToSupabase(leads, userId) {
+  if(!userId||userId==="demo"||leads.length===0) return;
+  try {
+    const rows = leads.map(l => ({
+      id: l.id,
+      user_id: userId,
+      name: l.name,
+      segment: l.segment,
+      city: l.city,
+      phone: l.phone||null,
+      rating: l.rating||0,
+      review_count: l.review_count||0,
+      has_whatsapp: !!l.has_whatsapp,
+      website: l.website||null,
+      ai_score: l.ai_score||0,
+      score_label: l.score_label||"",
+      pain_points: l.pain_points||[],
+      ai_message: l.ai_message||"",
+      status: l.status||"new",
+      history: l.history||[]
+    }));
+    await sbFetch("/rest/v1/leads?on_conflict=id", {
+      method:"POST",
+      headers:{"Prefer":"resolution=merge-duplicates"},
+      body:JSON.stringify(rows)
+    });
+  } catch(e) { console.warn("Erro ao salvar leads:", e); }
+}
+
+async function loadLeadsFromSupabase(userId) {
+  if(!userId||userId==="demo") return [];
+  try {
+    const {ok,data} = await sbFetch(`/rest/v1/leads?user_id=eq.${userId}&order=created_at.desc&limit=500`);
+    if(!ok||!Array.isArray(data)) return [];
+    return data.map(l=>({
+      id: l.id,
+      name: l.name,
+      segment: l.segment,
+      city: l.city,
+      phone: l.phone,
+      rating: l.rating,
+      review_count: l.review_count,
+      has_whatsapp: l.has_whatsapp,
+      website: l.website,
+      ai_score: l.ai_score,
+      score_label: l.score_label,
+      pain_points: l.pain_points||[],
+      ai_message: l.ai_message,
+      status: l.status||"new",
+      history: l.history||[]
+    }));
+  } catch(e) { console.warn("Erro ao carregar leads:", e); return []; }
+}
+
+async function updateLeadInSupabase(leadId, updates, userId) {
+  if(!userId||userId==="demo") return;
+  try {
+    const allowed = {};
+    if(updates.status !== undefined) allowed.status = updates.status;
+    if(updates.ai_message !== undefined) allowed.ai_message = updates.ai_message;
+    if(updates.history !== undefined) allowed.history = updates.history;
+    if(Object.keys(allowed).length === 0) return;
+    await sbFetch(`/rest/v1/leads?id=eq.${leadId}&user_id=eq.${userId}`, {
+      method:"PATCH",
+      headers:{"Prefer":"return=minimal"},
+      body:JSON.stringify(allowed)
+    });
+  } catch(e) { console.warn("Erro ao atualizar lead:", e); }
+}
+
+async function loadProfileFromSupabase(userId) {
+  if(!userId||userId==="demo") return null;
+  try {
+    const {ok,data} = await sbFetch(`/rest/v1/profiles?id=eq.${userId}`);
+    if(!ok||!Array.isArray(data)||data.length===0) return null;
+    return data[0];
+  } catch(e) { return null; }
+}
+
+async function saveProfileToSupabase(userId, updates) {
+  if(!userId||userId==="demo") return;
+  try {
+    await sbFetch(`/rest/v1/profiles?id=eq.${userId}`, {
+      method:"PATCH",
+      headers:{"Prefer":"return=minimal"},
+      body:JSON.stringify(updates)
+    });
+  } catch(e) { console.warn("Erro ao salvar perfil:", e); }
+}
+
+// ─── HASH NAVIGATION (resolve botão voltar) ───────────────────
+const VALID_PAGES = ["dashboard","search","leads","crm","profile","plans"];
+function getPageFromHash() {
+  const h = window.location.hash.replace("#","");
+  return VALID_PAGES.includes(h) ? h : "dashboard";
+}
+
+// ─── DADOS ────────────────────────────────────────────────────
+const PLANS = [
+  { id:"free",    label:"Free",    price:0,   maxLeads:10,  maxDisparos:3,   credits:50,  features:["10 leads/mês","3 disparos/mês","Score de IA básico","Suporte por email"], cta:"Plano Atual", badge:null, color:"gray" },
+  { id:"starter", label:"Starter", price:67,  maxLeads:100, maxDisparos:50,  credits:100, features:["100 leads/mês","50 disparos/mês","Score de IA completo","Mensagem personalizada por IA","CRM completo","Suporte prioritário"], cta:"Assinar por R$ 67/mês", badge:"Mais popular 🔥", color:"indigo" },
+  { id:"pro",     label:"Pro",     price:147, maxLeads:500, maxDisparos:99999,credits:500,features:["500 leads/mês","Disparos ilimitados","IA premium","Multi-nicho","Follow-up automático","API de integração","Onboarding dedicado"], cta:"Assinar por R$ 147/mês", badge:"⚡ IA Premium", color:"yellow" },
+];
+
+const KANBAN_COLS = [
+  { id:"new",     label:"Novos",     color:"#6366f1", icon:"⚡" },
+  { id:"sent",    label:"Enviado",   color:"#f59e0b", icon:"📤" },
+  { id:"replied", label:"Respondeu", color:"#3b82f6", icon:"💬" },
+  { id:"closed",  label:"Fechou",    color:"#22c55e", icon:"🏆" },
+];
+
+const ONBOARD_STEPS = [
+  { icon:"🤖", title:"Bem-vindo ao LeadAI Pro!", sub:"Prospecção inteligente com Inteligência Artificial", body:"Encontre leads qualificados, analise o potencial de cada um com IA e envie mensagens personalizadas — tudo num único app.", color:"from-indigo-500 to-purple-600" },
+  { icon:"🔍", title:"Extraia leads do Google Maps", sub:"Nicho + cidade + filtros = lista limpa", body:"Defina o segmento, a cidade, a nota mínima e o número de avaliações. O app busca, filtra e entrega os leads prontos para abordagem.", color:"from-blue-500 to-cyan-500" },
+  { icon:"🧠", title:"Score de Oportunidade por IA", sub:"Saiba quem está pronto para comprar", body:"Nossa IA lê as avaliações reais do Google Maps, detecta as dores dos clientes e gera uma pontuação de 0-100.", color:"from-purple-500 to-pink-500" },
+  { icon:"💬", title:"Mensagem personalizada por IA", sub:"Parece escrita à mão, não spam", body:"A IA cria uma abordagem única para cada lead baseada nas avaliações reais.", color:"from-green-500 to-teal-500" },
+  { icon:"📊", title:"Mini-CRM com funil integrado", sub:"Nunca deixe um lead esfriar", body:"Acompanhe cada lead no funil: Enviado → Respondeu → Fechou. Tudo no celular, de qualquer lugar.", color:"from-orange-500 to-red-500" },
+];
+
+// ─── HELPERS ──────────────────────────────────────────────────
+function timeAgo(ts) {
+  const d=(Date.now()-ts)/1000;
+  if(d<60) return "agora";
+  if(d<3600) return `${Math.floor(d/60)}min atrás`;
+  if(d<86400) return `${Math.floor(d/3600)}h atrás`;
+  return `${Math.floor(d/86400)}d atrás`;
+}
+function fmtDate(ts) {
+  return new Date(ts).toLocaleDateString("pt-BR",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
+}
+function ScoreRing({ score, size=60 }) {
+  const r=36,c=2*Math.PI*r,offset=c-(score/100)*c;
+  const color=score>=80?"#22c55e":score>=60?"#f59e0b":"#6b7280";
   return (
-    <div>
-      {!session ? (
-        <LoginForm onLogin={handleLogin} error={null} />
-      ) : (
-        <Dashboard user={session.user} credits={credits} onLogout={handleLogout} />
-      )}
+    <svg width={size} height={size} viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r={r} fill="none" stroke="#1e1e2e" strokeWidth="8"/>
+      <circle cx="40" cy="40" r={r} fill="none" stroke={color} strokeWidth="8"
+        strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round"
+        transform="rotate(-90 40 40)" style={{transition:"stroke-dashoffset 1.2s ease"}}/>
+      <text x="40" y="46" textAnchor="middle" fill={color} fontSize="16" fontWeight="bold">{score}</text>
+    </svg>
+  );
+}
+function Spinner() { return <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full spin inline-block"/>; }
+function Badge({ text, color="indigo" }) {
+  const c={indigo:"bg-indigo-500/20 text-indigo-300 border-indigo-500/30",green:"bg-green-500/20 text-green-300 border-green-500/30",yellow:"bg-yellow-500/20 text-yellow-300 border-yellow-500/30",red:"bg-red-500/10 text-red-300 border-red-500/20",gray:"bg-gray-500/20 text-gray-300 border-gray-500/30",purple:"bg-purple-500/20 text-purple-300 border-purple-500/30",blue:"bg-blue-500/20 text-blue-300 border-blue-500/30",teal:"bg-teal-500/20 text-teal-300 border-teal-500/30"};
+  return <span className={`text-xs px-2 py-0.5 rounded-full border ${c[color]||c.indigo}`}>{text}</span>;
+}
+
+// ─── ONBOARDING ───────────────────────────────────────────────
+function OnboardingModal({ onDone }) {
+  const [step,setStep]=useState(0);
+  const s=ONBOARD_STEPS[step];
+  const isLast=step===ONBOARD_STEPS.length-1;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-md fade-in">
+      <div className="glass-dark w-full max-w-sm rounded-3xl overflow-hidden pop-in">
+        <div className="flex gap-1 p-4 pb-0">{ONBOARD_STEPS.map((_,i)=><div key={i} className={`flex-1 h-1 rounded-full transition-all duration-500 ${i<=step?'bg-indigo-400':'bg-white/10'}`}/>)}</div>
+        <div className={`mx-auto mt-6 w-24 h-24 rounded-3xl bg-gradient-to-br ${s.color} flex items-center justify-center text-5xl pop-in glow`} key={step}>{s.icon}</div>
+        <div className="px-6 pt-5 pb-2 text-center" key={`c${step}`}>
+          <p className="text-xs text-indigo-400 font-semibold uppercase tracking-widest mb-1">Passo {step+1} de {ONBOARD_STEPS.length}</p>
+          <h2 className="text-xl font-black gradient-text mb-1">{s.title}</h2>
+          <p className="text-indigo-300 text-sm font-medium mb-3">{s.sub}</p>
+          <p className="text-gray-400 text-sm leading-relaxed">{s.body}</p>
+        </div>
+        <div className="flex justify-center gap-2 mt-4">{ONBOARD_STEPS.map((_,i)=><button key={i} onClick={()=>setStep(i)} className={`rounded-full transition-all duration-300 ${i===step?'w-6 h-2 bg-indigo-400':'w-2 h-2 bg-white/20'}`}/>)}</div>
+        <div className="p-5 flex gap-3">
+          <button onClick={onDone} className="flex-1 glass rounded-xl py-3 text-sm text-gray-400 border border-white/10 hover:text-white transition-all">Pular</button>
+          <button onClick={()=>isLast?onDone():setStep(s=>s+1)} className="flex-2 flex-grow gradient-btn rounded-xl py-3 font-bold text-white glow flex items-center justify-center gap-2">{isLast?"🚀 Começar agora!":"Próximo →"}</button>
+        </div>
+      </div>
     </div>
   );
 }
 
-function LoginForm({ onLogin, error }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onLogin(email, password).catch((err) => {
-      alert('Erro: ' + err.message);
-    });
-  };
-
+// ─── TIP BOX ──────────────────────────────────────────────────
+const TIPS = {
+  search: { icon:"💡", title:"Dica de extração", text:"Nichos com nota entre 3.0 e 4.0 têm mais dores ativas para resolver — são os leads mais quentes!", dismiss:"tip_search" },
+  leads:  { icon:"🎯", title:"Dica de abordagem", text:"Ordene por Score de IA e comece pelos leads acima de 80. A chance de resposta é 3x maior.", dismiss:"tip_leads" },
+  crm:    { icon:"📊", title:"Dica do funil", text:"Leads em 'Enviado' há mais de 2 dias precisam de follow-up. Um segundo contato aumenta a resposta em até 60%.", dismiss:"tip_crm" },
+};
+function TipBox({ page }) {
+  const tip=TIPS[page];
+  const [visible,setVisible]=useState(!getLs(tip?.dismiss,false));
+  if(!tip||!visible) return null;
   return (
-    <form onSubmit={handleSubmit}>
-      <input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="Email"
-      />
-      <input
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Senha"
-      />
-      <button type="submit">Entrar</button>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-    </form>
+    <div className="mx-4 mb-3 glass rounded-xl p-3 tip-box border border-indigo-500/20 slide-in">
+      <div className="flex items-start gap-2">
+        <span className="text-lg flex-shrink-0">{tip.icon}</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold text-indigo-300 mb-0.5">{tip.title}</p>
+          <p className="text-xs text-gray-400 leading-relaxed">{tip.text}</p>
+        </div>
+        <button onClick={()=>{setLs(tip.dismiss,true);setVisible(false);}} className="text-gray-600 hover:text-gray-400 text-lg leading-none ml-1 flex-shrink-0">✕</button>
+      </div>
+    </div>
   );
 }
 
-function Dashboard({ user, credits, onLogout }) {
+// ─── INTERACTION HISTORY ──────────────────────────────────────
+const HISTORY_META = {
+  extracted:{color:"#6366f1",icon:"📍",bg:"bg-indigo-500/20"},
+  ai:{color:"#a855f7",icon:"🤖",bg:"bg-purple-500/20"},
+  sent:{color:"#f59e0b",icon:"📤",bg:"bg-yellow-500/20"},
+  replied:{color:"#3b82f6",icon:"💬",bg:"bg-blue-500/20"},
+  closed:{color:"#22c55e",icon:"🏆",bg:"bg-green-500/20"},
+  note:{color:"#6b7280",icon:"📝",bg:"bg-gray-500/20"},
+};
+function InteractionHistory({ history=[], onAddNote }) {
+  const [note,setNote]=useState("");
+  const [showInput,setShowInput]=useState(false);
   return (
-    <div>
-      <h1>Bem-vindo, {user.email}</h1>
-      <p>Créditos do mês: {credits}</p>
-      <button on
+    <div className="p-5">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">📅 Histórico</p>
+        <button onClick={()=>setShowInput(v=>!v)} className="text-xs text-indigo-400 hover:text-indigo-300 glass px-2 py-1 rounded-lg border border-white/10 transition-all">+ Nota</button>
+      </div>
+      {showInput&&(
+        <div className="mb-3 slide-in">
+          <textarea value={note} onChange={e=>setNote(e.target.value)} rows={2} placeholder="Adicionar anotação..." className="w-full glass rounded-xl px-3 py-2 text-sm outline-none border border-white/10 focus:border-indigo-500 mb-2"/>
+          <div className="flex gap-2">
+            <button onClick={()=>{onAddNote(note);setNote("");setShowInput(false);}} className="flex-1 gradient-btn rounded-lg py-2 text-xs font-bold text-white">Salvar</button>
+            <button onClick={()=>setShowInput(false)} className="px-3 glass rounded-lg text-xs text-gray-400 border border-white/10">Cancelar</button>
+          </div>
+        </div>
+      )}
+      <div className="relative timeline-line space-y-3">
+        {[...history].reverse().map((h,i)=>{
+          const m=HISTORY_META[h.type]||HISTORY_META.note;
+          return (
+            <div key={i} className="flex gap-3 items-start relative z-10">
+              <div className={`w-5 h-5 rounded-full ${m.bg} flex items-center justify-center text-xs flex-shrink-0 mt-0.5`} style={{border:`1px solid ${m.color}40`}}><span style={{fontSize:"10px"}}>{m.icon}</span></div>
+              <div className="flex-1 min-w-0"><p className="text-xs text-gray-300 leading-tight">{h.label}</p><p className="text-[10px] text-gray-600 mt-0.5">{fmtDate(h.ts)}</p></div>
+              <span className="text-[10px] text-gray-600 flex-shrink-0">{timeAgo(h.ts)}</span>
+            </div>
+          );
+        })}
+        {history.length===0&&<p className="text-xs text-gray-600 py-2">Nenhuma interação ainda.</p>}
+      </div>
+    </div>
+  );
+}
+
+// ─── LEAD MODAL ───────────────────────────────────────────────
+function LeadModal({ lead, onClose, onStatusChange, onUpdateLead }) {
+  const [tab,setTab]=useState("msg");
+  const [editMode,setEditMode]=useState(false);
+  const [editedMsg,setEditedMsg]=useState(lead.ai_message||"");
+  const [sending,setSending]=useState(false);
+  const [sent,setSent]=useState(false);
+  const [validating,setValidating]=useState(false);
+  const [validated,setValidated]=useState(null);
+  const [msgSaved,setMsgSaved]=useState(false);
+
+  const handleSaveEdit=()=>{onUpdateLead(lead.id,{ai_message:editedMsg});setEditMode(false);setMsgSaved(true);setTimeout(()=>setMsgSaved(false),2000);};
+  const handleConfirmSend=async()=>{
+    setSending(true);
+    await new Promise(r=>setTimeout(r,1200));
+    const phone=(lead.phone||"").replace(/\D/g,"");
+    window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(editedMsg)}`,"_blank");
+    onStatusChange(lead.id,"sent");
+    onUpdateLead(lead.id,{status:"sent",history:[...lead.history,{type:"sent",label:"Mensagem enviada via WhatsApp",ts:Date.now()}]});
+    setSending(false);setSent(true);
+  };
+  const handleValidate=async()=>{setValidating(true);await new Promise(r=>setTimeout(r,1400));setValidated(lead.has_whatsapp);setValidating(false);};
+  const handleAddNote=(note)=>{if(!note.trim())return;onUpdateLead(lead.id,{history:[...lead.history,{type:"note",label:`📝 ${note}`,ts:Date.now()}]});};
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 bg-black/75 backdrop-blur-sm fade-in" onClick={onClose}>
+      <div className="glass-dark w-full max-w-md rounded-3xl border border-white/10 max-h-[93vh] overflow-y-auto slide-up" onClick={e=>e.stopPropagation()}>
+        <div className="p-5 border-b border-white/8">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-3">
+              <ScoreRing score={lead.ai_score||0} size={56}/>
+              <div>
+                <p className="font-bold text-sm leading-tight">{lead.name}</p>
+                <p className="text-gray-400 text-xs">{lead.segment} · {lead.city}</p>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  <Badge text={lead.score_label||"—"} color={lead.ai_score>=80?"green":lead.ai_score>=60?"yellow":"gray"}/>
+                  <Badge text={`⭐ ${lead.rating}`} color="indigo"/>
+                  {!lead.website&&<Badge text="Sem site 🎯" color="purple"/>}
+                </div>
+              </div>
+            </div>
+            <button onClick={onClose} className="text-gray-500 hover:text-white text-xl mt-1 flex-shrink-0 w-8 h-8 flex items-center justify-center">✕</button>
+          </div>
+          <div className="flex glass rounded-xl p-1 mt-4">
+            {[["msg","💬 Mensagem & Envio"],["history","📅 Histórico"]].map(([v,l])=>(
+              <button key={v} onClick={()=>setTab(v)} className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${tab===v?'gradient-btn text-white glow':'text-gray-400'}`}>{l}</button>
+            ))}
+          </div>
+        </div>
+        {tab==="msg"&&(
+          <>
+            <div className="px-5 pt-4 pb-3 border-b border-white/8">
+              <p className="text-xs font-bold text-red-400 uppercase tracking-wider mb-2">🎯 Dores Detectadas</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(lead.pain_points||[]).length>0
+                  ? (lead.pain_points||[]).map(p=><Badge key={p} text={p} color="red"/>)
+                  : <span className="text-xs text-gray-500">Analisando...</span>
+                }
+              </div>
+            </div>
+            <div className="px-5 pt-4 pb-4 border-b border-white/8">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-bold text-purple-400 uppercase tracking-wider">🤖 Preview da Mensagem</p>
+                <button onClick={()=>{setEditMode(v=>!v);if(!editMode)setEditedMsg(lead.ai_message||"");}} className={`text-xs px-3 py-1 rounded-lg border transition-all ${editMode?'border-purple-500 bg-purple-500/20 text-purple-300':'border-white/10 text-gray-400 hover:border-white/30'}`}>{editMode?"✕ Cancelar":"✏️ Editar"}</button>
+              </div>
+              {editMode?(
+                <div className="slide-in">
+                  <textarea value={editedMsg} onChange={e=>setEditedMsg(e.target.value)} rows={4} className="w-full glass rounded-xl px-4 py-3 text-sm border border-purple-500/40 outline-none focus:border-purple-400 leading-relaxed"/>
+                  <button onClick={handleSaveEdit} className="mt-2 w-full glass rounded-xl py-2.5 text-sm font-semibold text-purple-300 border border-purple-500/30 hover:bg-purple-500/10 transition-all">{msgSaved?"✅ Salvo!":"💾 Salvar edição"}</button>
+                </div>
+              ):(
+                <div className="bg-[#1e3a2e] rounded-2xl rounded-tl-sm px-4 py-3 border border-green-900/40">
+                  <p className="text-sm text-gray-100 leading-relaxed">{editedMsg||<span className="text-gray-500 italic">Mensagem não gerada.</span>}</p>
+                  <div className="flex items-center justify-end gap-1 mt-2"><span className="text-[10px] text-gray-500">Agora</span><span className="text-[10px] text-green-400">✓✓</span></div>
+                </div>
+              )}
+            </div>
+            <div className="px-5 pt-4 pb-4 border-b border-white/8">
+              <p className="text-xs font-bold text-green-400 uppercase tracking-wider mb-3">📱 WhatsApp</p>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="font-mono text-sm">{lead.phone||"Sem telefone"}</p>
+                  {validated!==null&&<p className={`text-xs mt-1 ${validated?'text-green-400':'text-red-400'}`}>{validated?"✅ WhatsApp ativo":"❌ Sem WhatsApp"}</p>}
+                </div>
+                <button onClick={handleValidate} disabled={validating} className="text-xs px-3 py-2 glass rounded-lg border border-white/10 hover:border-white/30 transition-all">{validating?<Spinner/>:"🔍 Validar"}</button>
+              </div>
+              {sent?(
+                <div className="w-full bg-green-600/20 border border-green-500/30 rounded-xl py-3 text-center text-green-400 text-sm font-semibold">✅ Mensagem enviada!</div>
+              ):(
+                <button onClick={handleConfirmSend} disabled={sending||!lead.phone} className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 rounded-xl py-3.5 font-bold text-sm transition-all flex items-center justify-center gap-2 glow-green disabled:opacity-50">
+                  {sending?<><Spinner/> Abrindo WhatsApp...</>:<><span>💬</span> Confirmar e Enviar</>}
+                </button>
+              )}
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">📊 Mover no Funil</p>
+              <div className="grid grid-cols-2 gap-2">
+                {KANBAN_COLS.map(col=>(
+                  <button key={col.id} onClick={()=>{onStatusChange(lead.id,col.id);onClose();}} className={`py-2.5 px-3 rounded-xl text-sm font-medium transition-all border ${lead.status===col.id?'border-indigo-500 bg-indigo-500/20 text-indigo-300':'border-white/10 text-gray-400 hover:border-white/30'}`}>{col.icon} {col.label}</button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+        {tab==="history"&&<InteractionHistory history={lead.history||[]} onAddNote={handleAddNote}/>}
+      </div>
+    </div>
+  );
+}
+
+// ─── CAMPAIGN REPORT ──────────────────────────────────────────
+function CampaignReport({ leads }) {
+  const total=leads.length,sent=leads.filter(l=>l.status!=="new").length,replied=leads.filter(l=>["replied","closed"].includes(l.status)).length,closed=leads.filter(l=>l.status==="closed").length;
+  const convRate=sent>0?Math.round(closed/sent*100):0,respRate=sent>0?Math.round(replied/sent*100):0,hotCount=leads.filter(l=>l.ai_score>=80).length;
+  const bars=[{label:"Extraídos",value:total,color:"#6366f1",pct:100},{label:"Enviados",value:sent,color:"#f59e0b",pct:total>0?Math.round(sent/total*100):0},{label:"Respostas",value:replied,color:"#3b82f6",pct:total>0?Math.round(replied/total*100):0},{label:"Fechados",value:closed,color:"#22c55e",pct:total>0?Math.round(closed/total*100):0}];
+  return (
+    <div className="px-4 mt-4">
+      <div className="flex items-center justify-between mb-3"><h2 className="font-bold text-sm">📈 Relatório da Campanha</h2><Badge text="Acumulado" color="indigo"/></div>
+      <div className="glass rounded-2xl p-4 border border-white/5">
+        <div className="space-y-3 mb-4">{bars.map(b=><div key={b.label} className="flex items-center gap-3"><span className="text-xs text-gray-400 w-16 flex-shrink-0">{b.label}</span><div className="flex-1 h-5 bg-white/5 rounded-full overflow-hidden relative"><div className="h-full rounded-full transition-all duration-1000" style={{width:`${b.pct}%`,background:`linear-gradient(90deg,${b.color}99,${b.color})`}}/><span className="absolute inset-0 flex items-center px-2 text-[10px] font-bold text-white">{b.value}</span></div><span className="text-xs font-bold w-8 text-right" style={{color:b.color}}>{b.pct}%</span></div>)}</div>
+        <div className="grid grid-cols-3 gap-2 pt-3 border-t border-white/8">
+          {[{label:"Conv. Rate",value:`${convRate}%`,color:"text-green-400",icon:"🏆"},{label:"Resp. Rate",value:`${respRate}%`,color:"text-blue-400",icon:"💬"},{label:"Quentes",value:hotCount,color:"text-orange-400",icon:"🔥"}].map(k=>(
+            <div key={k.label} className="glass rounded-xl p-2 text-center border border-white/5"><p className="text-sm mb-0.5">{k.icon}</p><p className={`font-black text-base ${k.color}`}>{k.value}</p><p className="text-gray-600 text-[10px]">{k.label}</p></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── AUTH SCREEN ──────────────────────────────────────────────
+function AuthScreen({ onAuth }) {
+  const [mode,setMode]=useState("login");
+  const [email,setEmail]=useState("");
+  const [password,setPassword]=useState("");
+  const [name,setName]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState("");
+  const [success,setSuccess]=useState("");
+
+  useEffect(()=>{
+    const params=new URLSearchParams(window.location.search);
+    if(params.get("payment")==="success"){
+      const plan=params.get("plan");
+      const em=params.get("email");
+      if(em) setEmail(em);
+      setSuccess(`✅ Pagamento confirmado! Faça login para acessar o plano ${plan==="pro"?"Pro":"Starter"}.`);
+      window.history.replaceState({},"","/");
+    }
+  },[]);
+
+  const submit=async()=>{
+    setError("");setSuccess("");
+    if(!email||(!password&&mode!=="forgot")){setError("Preencha todos os campos");return;}
+    setLoading(true);
+    try {
+      if(mode==="login"){
+        const {ok,data}=await sbFetch("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password})});
+        if(!ok) throw new Error(data.error_description||"Credenciais inválidas");
+        storeSession(data);onAuth({session:data,user:data.user});
+      } else if(mode==="signup"){
+        if(!name){setError("Digite seu nome");setLoading(false);return;}
+        const {ok,data}=await sbFetch("/auth/v1/signup",{method:"POST",body:JSON.stringify({email,password,data:{full_name:name}})});
+        if(!ok) throw new Error(data.error_description||"Erro ao cadastrar");
+        if(data.access_token){storeSession(data);onAuth({session:data,user:data.user});}
+        else setSuccess("✅ Verifique seu email para confirmar o cadastro!");
+      } else {
+        await sbFetch("/auth/v1/recover",{method:"POST",body:JSON.stringify({email})});
+        setSuccess("✅ Link enviado para seu email!");
+      }
+    } catch(e){setError(e.message);}
+    setLoading(false);
+  };
+  const demo=()=>onAuth({session:{access_token:"demo"},user:{id:"demo",email:"demo@leadai.com",user_metadata:{full_name:"Usuário Demo"}}});
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-[#0f0f1a] relative overflow-hidden fade-in">
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none"/>
+      <div className="mb-8 text-center">
+        <div className="w-16 h-16 gradient-btn rounded-2xl flex items-center justify-center text-3xl mb-3 mx-auto glow">🤖</div>
+        <h1 className="text-3xl font-black gradient-text">LeadAI Pro</h1>
+        <p className="text-gray-400 text-sm mt-1">Prospecção inteligente com IA</p>
+      </div>
+      <div className="glass rounded-3xl p-6 w-full max-w-sm border border-white/10">
+        <div className="flex glass rounded-xl p-1 mb-5">{[["login","Entrar"],["signup","Cadastrar"]].map(([m,l])=><button key={m} onClick={()=>{setMode(m);setError("");setSuccess("");}} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${mode===m?'gradient-btn text-white':'text-gray-400'}`}>{l}</button>)}</div>
+        <div className="space-y-3">
+          {mode==="signup"&&<div><label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">NOME</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="Ex: João Silva" className="w-full glass rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-500 border border-white/10"/></div>}
+          <div><label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">EMAIL</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="seu@email.com" className="w-full glass rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-500 border border-white/10"/></div>
+          {mode!=="forgot"&&<div><label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">SENHA</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Mínimo 8 caracteres" className="w-full glass rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-500 border border-white/10"/></div>}
+          {error&&<div className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 shake">{error}</div>}
+          {success&&<div className="text-green-400 text-xs bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2">{success}</div>}
+          <button onClick={submit} disabled={loading} className="w-full gradient-btn rounded-2xl py-3.5 font-bold text-white flex items-center justify-center gap-2 glow disabled:opacity-50">{loading?<><Spinner/> Aguarde...</>:mode==="login"?"🚀 Entrar":mode==="signup"?"✨ Criar conta":"📧 Enviar link"}</button>
+          {mode==="login"&&<button onClick={()=>setMode("forgot")} className="w-full text-xs text-gray-500 hover:text-gray-300 py-1">Esqueci minha senha</button>}
+          <div className="flex items-center gap-3"><div className="flex-1 h-px bg-white/10"/><span className="text-xs text-gray-600">ou</span><div className="flex-1 h-px bg-white/10"/></div>
+          <button onClick={demo} className="w-full glass rounded-2xl py-3 text-sm text-gray-300 border border-white/10 hover:border-indigo-500/40 flex items-center justify-center gap-2 transition-all">👀 Explorar em modo demo</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── CHECKOUT MODAL ───────────────────────────────────────────
+function CheckoutModal({ plan, userEmail, userName, onClose, onSuccess }) {
+  const [step, setStep] = useState("form");
+  const [name, setName] = useState(userName || "");
+  const [email, setEmail] = useState(userEmail || "");
+  const [cpf, setCpf] = useState("");
+  const [error, setError] = useState("");
+  const [payUrl, setPayUrl] = useState("");
+  const planInfo = PLANS.find(p => p.id === plan);
+
+  const handlePay = async () => {
+    if (!name || !email) { setError("Nome e email são obrigatórios"); return; }
+    setStep("processing"); setError("");
+    try {
+      const res = await fetch("/api/create-checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ planId: plan, customerName: name, customerEmail: email, customerCpfCnpj: cpf || null }) });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setPayUrl(data.paymentUrl); setStep("redirect");
+      window.open(data.paymentUrl, "_blank");
+    } catch(e) { setError(e.message); setStep("form"); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-md fade-in" onClick={onClose}>
+      <div className="glass-dark w-full max-w-sm rounded-3xl border border-white/10 overflow-hidden slide-up" onClick={e=>e.stopPropagation()}>
+        <div className={`p-5 ${plan==="pro"?"gradient-gold":"gradient-btn"}`}>
+          <div className="flex items-center justify-between">
+            <div><p className="text-xs text-white/70 uppercase tracking-wide font-semibold">Assinar plano</p><h2 className="text-xl font-black text-white">{planInfo?.label} — R$ {planInfo?.price}/mês</h2></div>
+            <button onClick={onClose} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-all">✕</button>
+          </div>
+          <div className="flex flex-wrap gap-2 mt-3">{[{icon:"💳",label:"Cartão em até 6x"},{icon:"⚡",label:"Pix instantâneo"},{icon:"📄",label:"Boleto bancário"}].map(m=><span key={m.label} className="text-xs bg-white/20 text-white px-2.5 py-1 rounded-full font-medium">{m.icon} {m.label}</span>)}</div>
+        </div>
+        {step==="form"&&<div className="p-5 space-y-3">
+          <div><label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">Nome completo *</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="Seu nome" className="w-full glass rounded-xl px-4 py-3 text-sm outline-none border border-white/10 focus:border-indigo-500"/></div>
+          <div><label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">Email *</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="seu@email.com" className="w-full glass rounded-xl px-4 py-3 text-sm outline-none border border-white/10 focus:border-indigo-500"/></div>
+          <div><label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">CPF/CNPJ (opcional)</label><input value={cpf} onChange={e=>setCpf(e.target.value)} placeholder="000.000.000-00" className="w-full glass rounded-xl px-4 py-3 text-sm outline-none border border-white/10 focus:border-indigo-500"/></div>
+          {error&&<div className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{error}</div>}
+          <div className="glass rounded-xl p-3 border border-white/5"><p className="text-xs text-gray-400 leading-relaxed">🔒 Pagamento 100% seguro via <strong className="text-white">Asaas</strong>. Cancele quando quiser.</p></div>
+          <button onClick={handlePay} className={`w-full rounded-2xl py-4 font-bold text-white text-sm flex items-center justify-center gap-2 transition-all ${plan==="pro"?"gradient-gold glow-gold":"gradient-btn glow"}`}>💳 Ir para o Pagamento — R$ {planInfo?.price}/mês</button>
+          <p className="text-[10px] text-gray-600 text-center">Assinatura mensal recorrente. Cancele quando quiser.</p>
+        </div>}
+        {step==="processing"&&<div className="p-8 text-center"><Spinner/><p className="text-sm text-gray-300 mt-4">Preparando seu pagamento seguro...</p></div>}
+        {step==="redirect"&&<div className="p-6 text-center">
+          <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 border border-green-500/30">✅</div>
+          <h3 className="font-bold text-lg mb-2">Página de pagamento aberta!</h3>
+          <p className="text-gray-400 text-sm mb-4">Uma nova aba foi aberta. Após pagar, seu plano será ativado automaticamente.</p>
+          <a href={payUrl} target="_blank" rel="noreferrer" className="w-full block gradient-btn rounded-xl py-3 font-bold text-white text-sm text-center mb-3">🔗 Abrir novamente</a>
+          <button onClick={onClose} className="w-full glass rounded-xl py-3 text-gray-400 text-sm border border-white/10">Fechar</button>
+        </div>}
+      </div>
+    </div>
+  );
+}
+
+// ─── PLANS SCREEN ─────────────────────────────────────────────
+function PlansScreen({ currentPlan, userEmail, userName, onBack, onCheckout }) {
+  const [annual,setAnnual]=useState(false);
+  return (
+    <div className="min-h-screen bg-[#0f0f1a] pb-10 fade-in">
+      <div className="sticky top-0 z-20 glass border-b border-white/10 px-4 py-3 flex items-center gap-3">
+        <button onClick={onBack} className="text-gray-400 hover:text-white text-xl">←</button>
+        <div><h1 className="font-bold gradient-text">Escolha seu Plano</h1><p className="text-xs text-gray-500">Cancele quando quiser</p></div>
+      </div>
+      <div className="px-4 pt-6">
+        <div className="flex items-center justify-center gap-3 mb-6">
+          <span className={`text-sm ${!annual?'text-white font-semibold':'text-gray-500'}`}>Mensal</span>
+          <button onClick={()=>setAnnual(a=>!a)} className={`relative w-12 h-6 rounded-full transition-all ${annual?'bg-indigo-500':'bg-gray-700'}`}><div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${annual?'left-7':'left-1'}`}/></button>
+          <span className={`text-sm ${annual?'text-white font-semibold':'text-gray-500'}`}>Anual <Badge text="2 meses grátis" color="green"/></span>
+        </div>
+        <div className="space-y-4">
+          {PLANS.map(plan=>{
+            const isCurrent=plan.id===currentPlan;
+            const price=annual&&plan.price>0?Math.round(plan.price*10*.8/12):plan.price;
+            return (
+              <div key={plan.id} className={`glass rounded-3xl overflow-hidden border transition-all ${plan.id==="starter"?'border-indigo-500/60 glow':isCurrent?'border-green-500/40':'border-white/10'}`}>
+                {plan.badge&&<div className={`px-4 py-2 text-xs font-bold text-center ${plan.id==="pro"?'gradient-gold':'gradient-btn'} text-white`}>{plan.badge}</div>}
+                <div className="p-5">
+                  <div className="flex items-start justify-between mb-4">
+                    <div><h2 className="font-black text-xl">{plan.label}</h2><p className="text-3xl font-black gradient-text mt-1">{price===0?"R$ 0":`R$ ${price}`}{price>0&&<span className="text-sm text-gray-400 font-normal">/mês</span>}</p></div>
+                    <div className="text-right"><p className="text-2xl font-black text-indigo-400">{plan.maxLeads.toLocaleString()}</p><p className="text-xs text-gray-500">leads/mês</p></div>
+                  </div>
+                  <ul className="space-y-2 mb-4">{plan.features.map(f=><li key={f} className="flex items-start gap-2 text-sm text-gray-300"><span className="text-green-400 flex-shrink-0 mt-0.5">✓</span>{f}</li>)}</ul>
+                  <button onClick={()=>{if(plan.id!=="free"&&!isCurrent) onCheckout(plan.id);}} disabled={isCurrent||plan.id==="free"} className={`w-full rounded-2xl py-3.5 font-bold text-sm flex items-center justify-center gap-2 transition-all ${isCurrent?'bg-green-600/20 text-green-400 border border-green-500/30 cursor-default':plan.id==="pro"?'gradient-gold text-white glow-gold':plan.id==="starter"?'gradient-btn text-white glow':'glass border border-white/10 text-gray-400 cursor-default'}`}>{isCurrent?'✅ Plano Atual':plan.id==="free"?'Plano gratuito':plan.cta}</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-6 glass rounded-2xl p-4 border border-white/5"><p className="text-xs text-gray-400 text-center leading-relaxed">🔒 Pagamento seguro via <strong className="text-white">Asaas</strong> · Pix, Cartão ou Boleto · Cancele quando quiser</p></div>
+      </div>
+    </div>
+  );
+}
+
+// ─── DASHBOARD ────────────────────────────────────────────────
+function Dashboard({ leads, user, plan, onNavigate, credits }) {
+  const hot=leads.filter(l=>l.ai_score>=80&&l.status==="new").sort((a,b)=>b.ai_score-a.ai_score);
+  const closed=leads.filter(l=>l.status==="closed").length;
+  const planInfo=PLANS.find(p=>p.id===plan)||PLANS[0];
+  const creditMax=planInfo.credits||50;
+  const creditPct=Math.min(100,Math.round((credits/creditMax)*100));
+  const name=user?.user_metadata?.full_name||user?.email?.split("@")[0]||"Usuário";
+  return (
+    <div className="pb-24 slide-in">
+      <div className="px-4 pt-6 pb-3 flex items-center justify-between">
+        <div><p className="text-gray-400 text-sm">Olá, {name.split(" ")[0]} 👋</p><h1 className="text-2xl font-black gradient-text">LeadAI Pro</h1></div>
+        <div className="flex items-center gap-2">
+          <button onClick={()=>onNavigate("plans")} className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${plan==="pro"?'border-yellow-500/50 text-yellow-400 bg-yellow-500/10':plan==="starter"?'border-indigo-500/50 text-indigo-300 bg-indigo-500/10':'border-white/10 text-gray-400'}`}>{plan==="pro"?"⚡ Pro":plan==="starter"?"🚀 Starter":"Free"}</button>
+          <div className="w-9 h-9 rounded-full gradient-btn flex items-center justify-center text-lg glow">🤖</div>
+        </div>
+      </div>
+      <div className="px-4 mb-4">
+        <div className="glass rounded-2xl p-3 border border-white/5">
+          <div className="flex justify-between items-center mb-1.5"><span className="text-xs text-gray-400">Créditos do mês</span><span className="text-xs font-bold text-indigo-300">{credits}/{creditMax}</span></div>
+          <div className="h-1.5 bg-white/10 rounded-full overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500" style={{width:`${creditPct}%`}}/></div>
+          {credits<creditMax*.2&&<button onClick={()=>onNavigate("plans")} className="mt-1 text-xs text-yellow-400">⚠️ Créditos acabando — Upgrade →</button>}
+        </div>
+      </div>
+      <div className="px-4 grid grid-cols-2 gap-3">
+        {[{label:"Total Leads",value:leads.length,icon:"📋",g:"from-indigo-600 to-indigo-800"},{label:"Enviados",value:leads.filter(l=>l.status!=="new").length,icon:"📤",g:"from-purple-600 to-purple-800"},{label:"Respostas",value:leads.filter(l=>["replied","closed"].includes(l.status)).length,icon:"💬",g:"from-blue-600 to-blue-800"},{label:"Fechamentos",value:closed,icon:"🏆",g:"from-green-600 to-green-800"}].map(s=>(
+          <div key={s.label} className="glass rounded-2xl p-4 card-hover"><div className="flex justify-between items-center mb-1"><span className="text-2xl">{s.icon}</span><span className={`text-3xl font-black bg-gradient-to-r ${s.g} bg-clip-text text-transparent`}>{s.value}</span></div><p className="text-gray-500 text-xs">{s.label}</p></div>
+        ))}
+      </div>
+      <CampaignReport leads={leads}/>
+      {hot.length>0&&(
+        <div className="px-4 mt-4">
+          <div className="flex justify-between items-center mb-3"><p className="font-bold text-sm">🔥 Leads Quentes</p><button onClick={()=>onNavigate("leads")} className="text-indigo-400 text-xs">Ver todos →</button></div>
+          <div className="space-y-2">{hot.slice(0,3).map(l=>(
+            <div key={l.id} className="glass rounded-xl p-3 card-hover border border-indigo-500/20 glow">
+              <div className="flex gap-3 items-center"><ScoreRing score={l.ai_score} size={48}/><div className="flex-1 min-w-0"><p className="font-semibold text-sm truncate">{l.name}</p><p className="text-gray-400 text-xs">{l.segment} · {l.city}</p><div className="flex gap-1 mt-1">{(l.pain_points||[]).slice(0,1).map(p=><Badge key={p} text={p} color="red"/>)}</div></div></div>
+            </div>
+          ))}</div>
+        </div>
+      )}
+      {leads.length===0&&(
+        <div className="px-4 mt-6">
+          <div className="glass rounded-2xl p-6 border border-white/5 text-center">
+            <p className="text-4xl mb-3">🔍</p>
+            <p className="font-bold text-sm mb-1">Nenhum lead ainda</p>
+            <p className="text-gray-500 text-xs mb-4">Faça sua primeira busca para extrair leads reais do Google Maps com análise de IA.</p>
+            <button onClick={()=>onNavigate("search")} className="gradient-btn rounded-xl px-6 py-2.5 font-bold text-white text-sm glow">Buscar agora →</button>
+          </div>
+        </div>
+      )}
+      <div className="px-4 mt-4"><button onClick={()=>onNavigate("search")} className="w-full gradient-btn rounded-2xl py-4 font-bold text-white glow flex items-center justify-center gap-2">🔍 Extrair Novos Leads com IA</button></div>
+    </div>
+  );
+}
+
+// ─── SEARCH PAGE ──────────────────────────────────────────────
+function SearchPage({ onLeadsFound, plan, onNeedUpgrade }) {
+  const [form,setForm]=useState({niche:"",city:"",radius:"10",minRating:"3.5",minReviews:"20"});
+  const [loading,setLoading]=useState(false);
+  const [step,setStep]=useState("");
+  const [done,setDone]=useState(false);
+  const [resultCount,setResultCount]=useState(0);
+  const [errorMsg,setErrorMsg]=useState("");
+  const niches=["Clínica de Estética","Salão de Beleza","Restaurante","Academia","Farmácia","Odontologia","Advocacia","Contabilidade","Auto Peças","Petshop","Dentista","Mecânica"];
+  const planInfo=PLANS.find(p=>p.id===plan)||PLANS[0];
+
+  const run=async()=>{
+    if(!form.niche||!form.city){alert("Preencha nicho e cidade!");return;}
+    setLoading(true);setDone(false);setErrorMsg("");
+    const steps=["🔍 Buscando no Google Maps...","✅ Estabelecimentos encontrados","🧹 Filtrando por critérios...","📱 Validando dados...","🤖 IA analisando avaliações...","✨ Gerando scores de oportunidade..."];
+    let si=0; setStep(steps[si]);
+    const stepInterval=setInterval(()=>{si=Math.min(si+1,steps.length-1);setStep(steps[si]);},900);
+    try {
+      const resp=await fetch("/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({niche:form.niche,city:form.city,minRating:form.minRating,minReviews:form.minReviews,plan})});
+      clearInterval(stepInterval);
+      const contentType=resp.headers.get("content-type")||"";
+      if(!contentType.includes("application/json")){const text=await resp.text();throw new Error(`Resposta inesperada: ${text.slice(0,120)}`);}
+      const result=await resp.json();
+      if(result.error) throw new Error(result.error);
+      if(!result.leads||result.leads.length===0){setErrorMsg("Nenhum lead encontrado. Tente aumentar o raio ou diminuir os filtros.");setLoading(false);return;}
+      setResultCount(result.leads.length);
+      onLeadsFound(result.leads);
+      setDone(true);
+    } catch(e){clearInterval(stepInterval);setErrorMsg("Erro: "+e.message);}
+    setLoading(false);
+  };
+
+  return (
+    <div className="pb-24 slide-in">
+      <div className="px-4 pt-6 pb-2"><h1 className="text-xl font-bold gradient-text">🔍 Extrair Leads</h1><p className="text-gray-400 text-sm">Configure e deixa a IA trabalhar · Limite: {planInfo.maxLeads} leads/busca</p></div>
+      <TipBox page="search"/>
+      <div className="px-4 space-y-4">
+        <div>
+          <label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">NICHO *</label>
+          <input value={form.niche} onChange={e=>setForm({...form,niche:e.target.value})} placeholder="Ex: Clínica de Estética..." className="w-full glass rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-500 border border-white/10"/>
+          <div className="flex flex-wrap gap-2 mt-2">{niches.slice(0,8).map(n=><button key={n} onClick={()=>setForm({...form,niche:n})} className={`text-xs px-3 py-1 rounded-full border transition-all ${form.niche===n?'border-indigo-500 bg-indigo-500/20 text-indigo-300':'border-white/10 text-gray-500 hover:border-white/30'}`}>{n}</button>)}</div>
+        </div>
+        <div>
+          <label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">CIDADE *</label>
+          <input value={form.city} onChange={e=>setForm({...form,city:e.target.value})} placeholder="Ex: São Paulo, Campinas, Sumaré..." className="w-full glass rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-500 border border-white/10"/>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {[["radius","RAIO (KM)",["5","10","20","50"].map(v=>({v,l:`${v} km`}))],["minRating","NOTA MÍNIMA ★",["2","2.5","3","3.5","4","4.5"].map(v=>({v,l:`≥ ${v}`}))],["minReviews","MIN. AVALIAÇÕES",["10","20","50","100"].map(v=>({v,l:`≥ ${v}`}))]].map(([key,label,opts])=>(
+            <div key={key}><label className="text-xs text-gray-400 mb-1 block uppercase tracking-wide">{label}</label><select value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} className="w-full glass rounded-xl px-3 py-3 text-sm outline-none border border-white/10 bg-transparent">{opts.map(({v,l})=><option key={v} value={v}>{l}</option>)}</select></div>
+          ))}
+        </div>
+        {plan==="free"&&<div className="glass rounded-xl p-3 border border-yellow-500/20 flex items-start gap-2"><span className="text-lg">⚠️</span><div className="flex-1"><p className="text-xs text-yellow-300 font-semibold">Plano Free — máximo 10 leads</p><button onClick={onNeedUpgrade} className="text-xs text-indigo-400 mt-0.5">Fazer upgrade →</button></div></div>}
+        {loading&&<div className="glass rounded-2xl p-4 border border-indigo-500/30"><div className="flex items-center gap-3 mb-2"><Spinner/><p className="text-sm text-indigo-300">{step}</p></div><div className="h-1.5 bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full animate-pulse" style={{width:"70%"}}/></div></div>}
+        {errorMsg&&<div className="glass rounded-2xl p-4 border border-red-500/30"><p className="text-red-400 font-semibold text-sm">❌ {errorMsg}</p></div>}
+        {done&&<div className="glass rounded-2xl p-4 border border-green-500/30 glow-green"><p className="text-green-400 font-semibold">✅ {resultCount} leads extraídos e salvos!</p><p className="text-gray-400 text-xs mt-1">Veja os resultados na aba Leads</p></div>}
+        <button onClick={run} disabled={loading} className="w-full gradient-btn rounded-2xl py-4 font-bold text-white glow flex items-center justify-center gap-2 disabled:opacity-50">{loading?<><Spinner/> Processando...</>:<><span>🚀</span> Extrair e Analisar com IA</>}</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── LEADS PAGE ───────────────────────────────────────────────
+function LeadsPage({ leads, onStatusChange, onUpdateLead }) {
+  const [filter,setFilter]=useState("all");
+  const [sort,setSort]=useState("score");
+  const [selected,setSelected]=useState(null);
+  const filtered=leads.filter(l=>filter==="all"||l.status===filter).sort((a,b)=>sort==="score"?(b.ai_score||0)-(a.ai_score||0):(b.rating||0)-(a.rating||0));
+  const sCol={new:"indigo",sent:"yellow",replied:"blue",closed:"green"};
+  const sLbl={new:"Novo",sent:"Enviado",replied:"Respondeu",closed:"Fechou"};
+  const selectedLead=selected?leads.find(l=>l.id===selected.id)||selected:null;
+  return (
+    <div className="pb-24 slide-in">
+      <div className="px-4 pt-6 pb-2"><h1 className="text-xl font-bold gradient-text">📋 Leads</h1><p className="text-gray-400 text-sm">{leads.length} leads salvos</p></div>
+      <TipBox page="leads"/>
+      <div className="px-4 mb-3"><div className="flex gap-2 overflow-x-auto pb-1">
+        {[["all","Todos",leads.length],["new","Novos",leads.filter(l=>l.status==="new").length],["sent","Enviados",leads.filter(l=>l.status==="sent").length],["replied","Respostas",leads.filter(l=>l.status==="replied").length],["closed","Fechados",leads.filter(l=>l.status==="closed").length]].map(([v,l,n])=>(
+          <button key={v} onClick={()=>setFilter(v)} className={`whitespace-nowrap text-xs px-3 py-1.5 rounded-full border transition-all ${filter===v?'border-indigo-500 bg-indigo-500/20 text-indigo-300':'border-white/10 text-gray-500'}`}>{l} ({n})</button>
+        ))}
+        <button onClick={()=>setSort(s=>s==="score"?"rating":"score")} className="whitespace-nowrap text-xs px-3 py-1.5 rounded-full border border-white/10 text-gray-500 ml-1">{sort==="score"?"🏅 Score":"⭐ Nota"}</button>
+      </div></div>
+      <div className="px-4 space-y-3">
+        {filtered.map(l=>(
+          <div key={l.id} onClick={()=>setSelected(l)} className="glass rounded-2xl p-4 card-hover cursor-pointer border border-white/5 hover:border-indigo-500/30 transition-all">
+            <div className="flex gap-3 items-center"><ScoreRing score={l.ai_score||0} size={52}/>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2"><p className="font-semibold text-sm truncate">{l.name}</p><Badge text={sLbl[l.status]||l.status} color={sCol[l.status]||"gray"}/></div>
+                <p className="text-gray-400 text-xs">{l.segment} · {l.city}</p>
+                <div className="flex items-center gap-3 mt-1"><span className="text-xs text-yellow-400">⭐ {l.rating}</span><span className="text-xs text-gray-500">{l.review_count} aval.</span><span className={`text-xs ${l.has_whatsapp?"text-green-400":"text-red-400"}`}>{l.has_whatsapp?"✓ WA":"✗ WA"}</span></div>
+                {(l.pain_points||[]).length>0&&<div className="mt-1.5"><Badge text={`🎯 ${l.pain_points[0]}`} color="red"/></div>}
+              </div>
+            </div>
+          </div>
+        ))}
+        {filtered.length===0&&<div className="text-center text-gray-500 py-12"><p className="text-3xl mb-2">📭</p><p>Nenhum lead encontrado</p><p className="text-xs mt-1">Faça uma busca na aba Buscar</p></div>}
+      </div>
+      {selectedLead&&<LeadModal lead={selectedLead} onClose={()=>setSelected(null)} onStatusChange={onStatusChange} onUpdateLead={onUpdateLead}/>}
+    </div>
+  );
+}
+
+// ─── CRM PAGE ─────────────────────────────────────────────────
+function CRMPage({ leads, onStatusChange, onUpdateLead }) {
+  const [selected,setSelected]=useState(null);
+  const selectedLead=selected?leads.find(l=>l.id===selected.id)||selected:null;
+  return (
+    <div className="pb-24 slide-in">
+      <div className="px-4 pt-6 pb-2"><h1 className="text-xl font-bold gradient-text">📊 Funil CRM</h1><p className="text-gray-400 text-sm">Acompanhe cada lead no funil</p></div>
+      <TipBox page="crm"/>
+      <div className="px-4"><div className="flex gap-3 overflow-x-auto pb-4 snap-x">
+        {KANBAN_COLS.map(col=>{
+          const colLeads=leads.filter(l=>l.status===col.id);
+          return (
+            <div key={col.id} className="snap-start flex-shrink-0 w-60">
+              <div className="flex items-center justify-between mb-3 px-1"><div className="flex items-center gap-2"><span>{col.icon}</span><span className="font-bold text-sm" style={{color:col.color}}>{col.label}</span></div><span className="text-xs glass px-2 py-0.5 rounded-full border border-white/10">{colLeads.length}</span></div>
+              <div className="space-y-2">
+                {colLeads.map(l=>(
+                  <div key={l.id} onClick={()=>setSelected(l)} className="glass rounded-xl p-3 cursor-pointer card-hover border border-white/5" style={{borderLeft:`3px solid ${col.color}`}}>
+                    <p className="font-semibold text-xs">{l.name}</p>
+                    <p className="text-gray-500 text-xs truncate">{l.segment}</p>
+                    <div className="flex justify-between mt-2 items-center"><span className="text-xs text-gray-400">{l.phone||"—"}</span><span className="text-xs font-bold" style={{color:l.ai_score>=80?"#22c55e":l.ai_score>=60?"#f59e0b":"#6b7280"}}>{l.ai_score}pts</span></div>
+                    {col.id==="sent"&&<div className="mt-1 flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-yellow-400 pulse-dot"/><span className="text-xs text-yellow-400">Follow-up em 2d</span></div>}
+                  </div>
+                ))}
+                {colLeads.length===0&&<div className="border-2 border-dashed border-white/5 rounded-xl p-4 text-center text-gray-600 text-xs">Sem leads</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div></div>
+      <div className="px-4"><div className="glass rounded-2xl p-4"><p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">📈 Resumo</p>{KANBAN_COLS.map(col=>{const n=leads.filter(l=>l.status===col.id).length,pct=leads.length>0?Math.round(n/leads.length*100):0;return <div key={col.id} className="flex items-center gap-3 mb-2"><span className="text-xs text-gray-400 w-20">{col.label}</span><div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden"><div className="h-full rounded-full transition-all" style={{width:`${pct}%`,backgroundColor:col.color}}/></div><span className="text-xs text-gray-400 w-6 text-right">{n}</span></div>;})}</div></div>
+      {selectedLead&&<LeadModal lead={selectedLead} onClose={()=>setSelected(null)} onStatusChange={onStatusChange} onUpdateLead={onUpdateLead}/>}
+    </div>
+  );
+}
+
+// ─── PROFILE PAGE ─────────────────────────────────────────────
+function ProfilePage({ user, plan, credits, onNavigate, onLogout }) {
+  const name=user?.user_metadata?.full_name||user?.email?.split("@")[0]||"Usuário";
+  const planInfo=PLANS.find(p=>p.id===plan)||PLANS[0];
+  return (
+    <div className="pb-24 slide-in">
+      <div className="px-4 pt-6 pb-4">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 gradient-btn rounded-full flex items-center justify-center text-2xl glow">{name[0]?.toUpperCase()||"U"}</div>
+          <div><p className="font-bold text-lg">{name}</p><p className="text-gray-400 text-sm">{user?.email}</p><button onClick={()=>onNavigate("plans")} className={`mt-1 text-xs px-3 py-1 rounded-full border font-semibold ${plan==="pro"?'border-yellow-500/50 text-yellow-400 bg-yellow-500/10':plan==="starter"?'border-indigo-500/50 text-indigo-300 bg-indigo-500/10':'border-white/10 text-gray-400'}`}>{plan==="pro"?"⚡ Pro":plan==="starter"?"🚀 Starter":"Free — Fazer Upgrade"}</button></div>
+        </div>
+      </div>
+      <div className="px-4 space-y-4">
+        <div className="glass rounded-2xl p-4 border border-indigo-500/20">
+          <div className="flex justify-between items-center mb-2"><p className="font-semibold text-sm">Créditos restantes</p><p className="text-indigo-300 font-bold">{credits}/{planInfo.credits}</p></div>
+          <div className="h-2 bg-white/10 rounded-full overflow-hidden mb-2"><div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500" style={{width:`${Math.min(100,Math.round(credits/planInfo.credits*100))}%`}}/></div>
+          <button onClick={()=>onNavigate("plans")} className="text-xs text-indigo-400">↑ Aumentar limite</button>
+        </div>
+        <div className="glass rounded-2xl p-4 border border-white/5">
+          <p className="font-bold text-sm mb-3 gradient-text">ℹ️ Sobre o produto</p>
+          <p className="text-xs text-gray-400 leading-relaxed">Leads extraídos do Google Maps com análise de IA. Plano atual: <strong className="text-indigo-300">{planInfo.label}</strong> · Limite: {planInfo.maxLeads} leads/busca</p>
+          <p className="text-xs text-gray-500 mt-2">Seus leads ficam salvos na sua conta e não somem ao recarregar a página. ✅</p>
+        </div>
+        {plan!=="pro"&&<button onClick={()=>onNavigate("plans")} className="w-full gradient-gold rounded-2xl py-3.5 font-bold text-white glow-gold flex items-center justify-center gap-2">⚡ Fazer Upgrade de Plano</button>}
+        <button onClick={onLogout} className="w-full glass rounded-2xl py-3 text-gray-400 border border-white/10 hover:border-red-500/30 hover:text-red-400 transition-all text-sm flex items-center justify-center gap-2">🚪 Sair da conta</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── DESKTOP SIDEBAR ──────────────────────────────────────────
+function DesktopSidebar({ active, onChange, plan, user }) {
+  const name=user?.user_metadata?.full_name||user?.email?.split("@")[0]||"Usuário";
+  const tabs=[{id:"dashboard",icon:"🏠",label:"Início"},{id:"search",icon:"🔍",label:"Buscar Leads"},{id:"leads",icon:"📋",label:"Meus Leads"},{id:"crm",icon:"📊",label:"Funil CRM"},{id:"profile",icon:"👤",label:"Perfil"}];
+  return (
+    <div className="desktop-sidebar">
+      <div className="desktop-sidebar-logo">
+        <div className="w-9 h-9 gradient-btn rounded-xl flex items-center justify-center text-lg glow flex-shrink-0">🤖</div>
+        <div><p className="font-black text-sm gradient-text leading-tight">LeadAI Pro</p><p className="text-[10px] text-gray-500">Prospecção com IA</p></div>
+      </div>
+      <div className="flex-1">{tabs.map(t=><button key={t.id} onClick={()=>onChange(t.id)} className={`desktop-nav-item ${active===t.id?'active':''}`}><span className="nav-icon">{t.icon}</span><span>{t.label}</span></button>)}</div>
+      <div className="mt-auto pt-4 border-t border-white/8">
+        <div className="flex items-center gap-3 px-2 py-2">
+          <div className="w-8 h-8 gradient-btn rounded-full flex items-center justify-center text-sm flex-shrink-0">{name[0]?.toUpperCase()||"U"}</div>
+          <div className="min-w-0"><p className="text-xs font-semibold truncate">{name.split(" ")[0]}</p><p className={`text-[10px] ${plan==="pro"?'text-yellow-400':plan==="starter"?'text-indigo-400':'text-gray-500'}`}>{plan==="pro"?"⚡ Pro":plan==="starter"?"🚀 Starter":"Free"}</p></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── BOTTOM NAV ───────────────────────────────────────────────
+function BottomNav({ active, onChange }) {
+  const tabs=[{id:"dashboard",icon:"🏠",label:"Início"},{id:"search",icon:"🔍",label:"Buscar"},{id:"leads",icon:"📋",label:"Leads"},{id:"crm",icon:"📊",label:"CRM"},{id:"profile",icon:"👤",label:"Perfil"}];
+  return (
+    <nav className="bottom-nav-mobile fixed bottom-0 left-0 right-0 z-40 glass border-t border-white/10">
+      <div className="flex max-w-lg mx-auto">
+        {tabs.map(t=>(
+          <button key={t.id} onClick={()=>onChange(t.id)} className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${active===t.id?'text-indigo-400':'text-gray-600'}`}>
+            <span className="text-xl">{t.icon}</span>
+            <span className="text-[10px] font-medium">{t.label}</span>
+            {active===t.id&&<div className="w-1 h-1 rounded-full bg-indigo-400"/>}
+          </button>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+// ─── APP ROOT ─────────────────────────────────────────────────
+function App() {
+  const [auth,setAuth]=useState(null);
+  const [page,setPage]=useState(getPageFromHash);
+  const [leads,setLeads]=useState([]);
+  const [plan,setPlan]=useState("free");
+  const [credits,setCredits]=useState(50);
+  const [showOnboard,setShowOnboard]=useState(false);
+  const [checkoutPlan,setCheckoutPlan]=useState(null);
+  const [loadingLeads,setLoadingLeads]=useState(false);
+
+  // ── Restaurar sessão ao carregar ──
+  useEffect(()=>{
+    const s=getStoredSession();
+    if(s?.access_token==="demo") setAuth({session:s,user:{id:"demo",email:"demo@leadai.com",user_metadata:{full_name:"Usuário Demo"}}});
+    else if(s?.user) setAuth({session:s,user:s.user});
+  },[]);
+
+  // ── Carregar leads + perfil do Supabase quando autenticar ──
+  useEffect(()=>{
+    if(!auth?.user?.id||auth.user.id==="demo") return;
+    const userId=auth.user.id;
+    setLoadingLeads(true);
+    Promise.all([
+      loadLeadsFromSupabase(userId),
+      loadProfileFromSupabase(userId)
+    ]).then(([savedLeads, profile])=>{
+      if(savedLeads.length>0) setLeads(savedLeads);
+      if(profile){
+        if(profile.plan) setPlan(profile.plan);
+        if(profile.credits!=null) setCredits(profile.credits);
+      }
+      setLoadingLeads(false);
+    });
+  },[auth]);
+
+  // ── Hash navigation — botão voltar não fecha o app ──
+  useEffect(()=>{
+    const onHash=()=>{ const p=getPageFromHash(); setPage(p); };
+    window.addEventListener("hashchange",onHash);
+    return()=>window.removeEventListener("hashchange",onHash);
+  },[]);
+
+  // ── Sincronizar hash com page ──
+  useEffect(()=>{
+    if(window.location.hash.replace("#","")!==page){
+      window.history.pushState(null,"",`#${page}`);
+    }
+  },[page]);
+
+  // ── Onboarding ──
+  useEffect(()=>{
+    if(auth&&!getLs("onboard_done",false)) setShowOnboard(true);
+  },[auth]);
+
+  const navigate=(p)=>{ setPage(p); window.history.pushState(null,"",`#${p}`); };
+
+  const handleAuth=(a)=>{
+    setAuth(a);
+    storeSession({...a.session,user:a.user});
+  };
+
+  const handleLogout=()=>{
+    storeSession(null);
+    setAuth(null);
+    setPage("dashboard");
+    setLeads([]);
+    window.history.pushState(null,"","#dashboard");
+  };
+
+  const handleOnboardDone=()=>{ setLs("onboard_done",true); setShowOnboard(false); };
+
+  const handleLeadsFound=async(newLeads)=>{
+    // Mescla novos leads com existentes (evita duplicatas por id)
+    setLeads(prev=>{
+      const existingIds=new Set(prev.map(l=>l.id));
+      const merged=[...newLeads,...prev.filter(l=>!existingIds.has(l.id)||!newLeads.find(n=>n.id===l.id))];
+      // Salva no Supabase
+      if(auth?.user?.id&&auth.user.id!=="demo"){
+        saveLeadsToSupabase(newLeads, auth.user.id);
+      }
+      return merged;
+    });
+    setPage("leads");
+    window.history.pushState(null,"","#leads");
+    setCredits(c=>{ const nv=Math.max(0,c-1); if(auth?.user?.id&&auth.user.id!=="demo") saveProfileToSupabase(auth.user.id,{credits:nv}); return nv; });
+  };
+
+  const handleStatus=(id,status)=>{
+    setLeads(prev=>prev.map(l=>{
+      if(l.id!==id) return l;
+      const updated={...l,status};
+      if(auth?.user?.id&&auth.user.id!=="demo") updateLeadInSupabase(id,{status},auth.user.id);
+      return updated;
+    }));
+  };
+
+  const handleUpdateLead=(id,updates)=>{
+    setLeads(prev=>prev.map(l=>{
+      if(l.id!==id) return l;
+      const updated={...l,...updates};
+      if(auth?.user?.id&&auth.user.id!=="demo") updateLeadInSupabase(id,updates,auth.user.id);
+      return updated;
+    }));
+  };
+
+  const handleCheckout=(planId)=>setCheckoutPlan(planId);
+  const handleCheckoutClose=()=>setCheckoutPlan(null);
+
+  if(!auth) return <AuthScreen onAuth={handleAuth}/>;
+
+  if(page==="plans") return (
+    <div className="min-h-screen bg-[#0f0f1a] max-w-lg mx-auto">
+      <PlansScreen currentPlan={plan} userEmail={auth.user?.email} userName={auth.user?.user_metadata?.full_name} onBack={()=>navigate("dashboard")} onCheckout={handleCheckout}/>
+      {checkoutPlan&&<CheckoutModal plan={checkoutPlan} userEmail={auth.user?.email} userName={auth.user?.user_metadata?.full_name} onClose={handleCheckoutClose} onSuccess={(p)=>{setPlan(p);setCredits(PLANS.find(x=>x.id===p)?.credits||50);saveProfileToSupabase(auth.user.id,{plan:p,credits:PLANS.find(x=>x.id===p)?.credits||50});setCheckoutPlan(null);navigate("dashboard");}}/>}
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#0f0f1a]">
+      <div className="fixed inset-0 pointer-events-none"><div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-96 bg-indigo-600/10 rounded-full blur-3xl"/><div className="absolute bottom-20 right-0 w-64 h-64 bg-purple-600/10 rounded-full blur-3xl"/></div>
+      {showOnboard&&<OnboardingModal onDone={handleOnboardDone}/>}
+      {checkoutPlan&&<CheckoutModal plan={checkoutPlan} userEmail={auth.user?.email} userName={auth.user?.user_metadata?.full_name} onClose={handleCheckoutClose} onSuccess={(p)=>{setPlan(p);setCredits(PLANS.find(x=>x.id===p)?.credits||50);saveProfileToSupabase(auth.user.id,{plan:p});setCheckoutPlan(null);}}/>}
+      {loadingLeads&&<div className="fixed top-4 right-4 z-50 glass rounded-xl px-3 py-2 text-xs text-indigo-300 border border-indigo-500/30 flex items-center gap-2"><Spinner/> Carregando seus leads...</div>}
+      <div className="desktop-shell">
+        <DesktopSidebar active={page} onChange={navigate} plan={plan} user={auth.user}/>
+        <div className="desktop-content relative z-10">
+          {page==="dashboard"&&<Dashboard leads={leads} user={auth.user} plan={plan} credits={credits} onNavigate={navigate}/>}
+          {page==="search"&&<SearchPage onLeadsFound={handleLeadsFound} plan={plan} onNeedUpgrade={()=>navigate("plans")}/>}
+          {page==="leads"&&<LeadsPage leads={leads} onStatusChange={handleStatus} onUpdateLead={handleUpdateLead}/>}
+          {page==="crm"&&<CRMPage leads={leads} onStatusChange={handleStatus} onUpdateLead={handleUpdateLead}/>}
+          {page==="profile"&&<ProfilePage user={auth.user} plan={plan} credits={credits} onNavigate={navigate} onLogout={handleLogout}/>}
+        </div>
+      </div>
+      <BottomNav active={page} onChange={navigate}/>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
