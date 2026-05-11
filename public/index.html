@@ -882,18 +882,54 @@ function App() {
   const [page,setPage]=useState(getPageFromHash);
   const [leads,setLeads]=useState([]);
   const [plan,setPlan]=useState("free");
-  const [credits,setCredits]=useState(50);
+  const [credits,setCredits]=useState(null);
   const [showOnboard,setShowOnboard]=useState(false);
   const [checkoutPlan,setCheckoutPlan]=useState(null);
   const [loadingLeads,setLoadingLeads]=useState(false);
 
-  // ── Restaurar sessão ao carregar ──
-  useEffect(()=>{
-    const s=getStoredSession();
-    if(s?.access_token==="demo") setAuth({session:s,user:{id:"demo",email:"demo@leadai.com",user_metadata:{full_name:"Usuário Demo"}}});
-    else if(s?.user) setAuth({session:s,user:s.user});
-  },[]);
+  // ── Restaurar sessão ao carregar ── 
+  async function loadUserData(userId){
+  const { data, error } = await supabase
+    .from("usuarios")
+    .select("*")
+    .eq("id", userId)
+    .single();
 
+  if(data){
+    setCredits(data.creditos);
+    setPlan(data.plano);
+  }
+
+  if(error){
+    console.error("Erro ao carregar usuário:", error);
+  }
+}
+  useEffect(()=>{
+  const s = getStoredSession();
+
+  if(s?.access_token==="demo"){
+    setAuth({
+      session:s,
+      user:{
+        id:"demo",
+        email:"demo@leadai.com",
+        user_metadata:{full_name:"Usuário Demo"}
+      }
+    });
+
+    setCredits(50);
+
+  } else if(s?.user){
+
+    setAuth({
+      session:s,
+      user:s.user
+    });
+
+    loadUserData(s.user.id);
+  }
+
+},[]);
   // ── Carregar leads + perfil do Supabase quando autenticar ──
   useEffect(()=>{
     if(!auth?.user?.id||auth.user.id==="demo") return;
