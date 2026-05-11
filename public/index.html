@@ -64,135 +64,172 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const SUPABASE_URL  = "https://ptvkywxtrzyntjirmebv.supabase.co";
 const SUPABASE_ANON = "sb_publishable_fJ_BlP4JTZPD3f3gFIn8FA_Jzwba6uW";
 
-function getStoredSession() { try { return JSON.parse(localStorage.getItem("leadai_session")||"null"); } catch { return null; } }
-function storeSession(s) { s ? localStorage.setItem("leadai_session",JSON.stringify(s)) : localStorage.removeItem("leadai_session"); }
-function getLs(k,d) { try { const v=localStorage.getItem(k); return v!=null?JSON.parse(v):d; } catch { return d; } }
+// ─── SESSION HELPERS ──────────────────────────────────────────
+function getStoredSession() {
+  try { return JSON.parse(localStorage.getItem("leadai_session")||"null"); }
+  catch { return null; }
+}
+function storeSession(s) {
+  s ? localStorage.setItem("leadai_session",JSON.stringify(s))
+    : localStorage.removeItem("leadai_session");
+}
+function getLs(k,d) {
+  try { const v=localStorage.getItem(k); return v!=null?JSON.parse(v):d; }
+  catch { return d; }
+}
 function setLs(k,v) { localStorage.setItem(k,JSON.stringify(v)); }
 
-async function sbFetch(path,opts={}) {
-  const session=getStoredSession();
-  const headers={"apikey":SUPABASE_ANON,"Content-Type":"application/json",...(session?.access_token?{"Authorization":`Bearer ${session.access_token}`}:{}),...(opts.headers||{})};
-  const res=await fetch(`${SUPABASE_URL}${path}`,{...opts,headers});
-  const text=await res.text();
-  try{return{ok:res.ok,status:res.status,data:JSON.parse(text)};}
-  catch{return{ok:res.ok,status:res.status,data:text};}
+// ─── FETCH BASE ───────────────────────────────────────────────
+// CORREÇÃO: sempre lê a sessão do localStorage na hora da chamada
+// para evitar closure stale com token antigo
+async function sbFetch(path, opts={}) {
+  const session = getStoredSession(); // lê sempre fresh
+  const headers = {
+    "apikey": SUPABASE_ANON,
+    "Content-Type": "application/json",
+    ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}),
+    ...(opts.headers || {})
+  };
+  const res = await fetch(`${SUPABASE_URL}${path}`, { ...opts, headers });
+  const text = await res.text();
+  try { return { ok: res.ok, status: res.status, data: JSON.parse(text) }; }
+  catch { return { ok: res.ok, status: res.status, data: text }; }
 }
 
 // ─── SUPABASE PERSISTENCE ─────────────────────────────────────
 
-// CORREÇÃO 1: loadUserData usa sbFetch (não SDK), com upsert automático
-// Tabela única: profiles. Sem conflito com "usuarios".
+// Carrega perfil do usuário — cria se não existir
+// Usa apenas a tabela "profiles" (coluna: id, email, plan, credits)
 async function loadUserData(userId, email) {
-  if(!userId || userId === "demo") return null;
+  if (!userId || userId === "demo") return null;
   try {
-    // Tenta buscar perfil existente
-    const {ok, data} = await sbFetch(`/rest/v1/profiles?id=eq.${userId}`);
-    if(ok && Array.isArray(data) && data.length > 0) {
-      return data[0]; // retorna {credits, plan, ...}
+    const { ok, data } = await sbFetch(
+      `/rest/v1/profiles?id=eq.${userId}&select=id,email,plan,credits`,
+      { headers: { "Accept": "application/json" } }
+    );
+
+    if (ok && Array.isArray(data) && data.length > 0) {
+      const p = data[0];
+      return {
+        plan:    p.plan    || "free",
+        credits: p.credits != null ? Number(p.credits) : 50
+      };
     }
-    // Perfil não existe: cria com valores padrão
-    const newProfile = { id: userId, email: email||"", plan: "free", credits: 50 };
+
+    // Perfil não existe → cria com valores padrão
+    const newProfile = { id: userId, email: email || "", plan: "free", credits: 50 };
     await sbFetch("/rest/v1/profiles", {
       method: "POST",
-      headers: { "Prefer": "return=representation" },
+      headers: { "Prefer": "return=minimal" },
       body: JSON.stringify(newProfile)
     });
-    return newProfile;
+    return { plan: "free", credits: 50 };
+
   } catch(e) {
     console.warn("Erro loadUserData:", e);
-    return null;
+    return { plan: "free", credits: 50 }; // fallback seguro
   }
 }
 
-// CORREÇÃO 2: saveProfileToSupabase usa upsert para garantir que sempre grava
+// Salva atualizações no perfil (plan, credits, etc.)
 async function saveProfileToSupabase(userId, updates) {
-  if(!userId || userId === "demo") return;
+  if (!userId || userId === "demo") return;
   try {
-    // Tenta PATCH primeiro
-    const {ok} = await sbFetch(`/rest/v1/profiles?id=eq.${userId}`, {
-      method: "PATCH",
-      headers: { "Prefer": "return=minimal" },
-      body: JSON.stringify(updates)
-    });
-    // Se não achou o registro (0 rows), faz upsert
-    if(!ok) {
+    // PATCH no registro existente
+    const { ok, status } = await sbFetch(
+      `/rest/v1/profiles?id=eq.${userId}`,
+      {
+        method: "PATCH",
+        headers: { "Prefer": "return=minimal" },
+        body: JSON.stringify(updates)
+      }
+    );
+
+    // Se nenhuma row afetada (404 ou status inesperado), faz upsert
+    if (!ok || status === 404) {
       await sbFetch("/rest/v1/profiles", {
         method: "POST",
-        headers: { "Prefer": "resolution=merge-duplicates" },
+        headers: { "Prefer": "resolution=merge-duplicates,return=minimal" },
         body: JSON.stringify({ id: userId, ...updates })
       });
     }
-  } catch(e) { console.warn("Erro ao salvar perfil:", e); }
+  } catch(e) { console.warn("Erro saveProfile:", e); }
 }
 
+// Salva array de leads novos (upsert por id)
 async function saveLeadsToSupabase(leads, userId) {
-  if(!userId||userId==="demo"||leads.length===0) return;
+  if (!userId || userId === "demo" || !leads || leads.length === 0) return;
   try {
     const rows = leads.map(l => ({
-      id: l.id,
-      user_id: userId,
-      name: l.name,
-      segment: l.segment,
-      city: l.city,
-      phone: l.phone||null,
-      rating: l.rating||0,
-      review_count: l.review_count||0,
+      id:           l.id,
+      user_id:      userId,
+      name:         l.name,
+      segment:      l.segment,
+      city:         l.city,
+      phone:        l.phone    || null,
+      rating:       l.rating   || 0,
+      review_count: l.review_count || 0,
       has_whatsapp: !!l.has_whatsapp,
-      website: l.website||null,
-      ai_score: l.ai_score||0,
-      score_label: l.score_label||"",
-      pain_points: l.pain_points||[],
-      ai_message: l.ai_message||"",
-      status: l.status||"new",
-      history: l.history||[]
+      website:      l.website  || null,
+      ai_score:     l.ai_score || 0,
+      score_label:  l.score_label || "",
+      pain_points:  l.pain_points || [],
+      ai_message:   l.ai_message  || "",
+      status:       l.status   || "new",
+      history:      l.history  || []
     }));
     await sbFetch("/rest/v1/leads?on_conflict=id", {
-      method:"POST",
-      headers:{"Prefer":"resolution=merge-duplicates"},
-      body:JSON.stringify(rows)
+      method: "POST",
+      headers: { "Prefer": "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify(rows)
     });
-  } catch(e) { console.warn("Erro ao salvar leads:", e); }
+  } catch(e) { console.warn("Erro saveLeads:", e); }
 }
 
+// Carrega todos os leads do usuário
 async function loadLeadsFromSupabase(userId) {
-  if(!userId||userId==="demo") return [];
+  if (!userId || userId === "demo") return [];
   try {
-    const {ok,data} = await sbFetch(`/rest/v1/leads?user_id=eq.${userId}&order=created_at.desc&limit=500`);
-    if(!ok||!Array.isArray(data)) return [];
-    return data.map(l=>({
-      id: l.id,
-      name: l.name,
-      segment: l.segment,
-      city: l.city,
-      phone: l.phone,
-      rating: l.rating,
+    const { ok, data } = await sbFetch(
+      `/rest/v1/leads?user_id=eq.${userId}&order=created_at.desc&limit=500`,
+      { headers: { "Accept": "application/json" } }
+    );
+    if (!ok || !Array.isArray(data)) return [];
+    return data.map(l => ({
+      id:           l.id,
+      name:         l.name,
+      segment:      l.segment,
+      city:         l.city,
+      phone:        l.phone,
+      rating:       l.rating,
       review_count: l.review_count,
       has_whatsapp: l.has_whatsapp,
-      website: l.website,
-      ai_score: l.ai_score,
-      score_label: l.score_label,
-      pain_points: l.pain_points||[],
-      ai_message: l.ai_message,
-      status: l.status||"new",
-      history: l.history||[]
+      website:      l.website,
+      ai_score:     l.ai_score,
+      score_label:  l.score_label,
+      pain_points:  l.pain_points  || [],
+      ai_message:   l.ai_message,
+      status:       l.status       || "new",
+      history:      l.history      || []
     }));
-  } catch(e) { console.warn("Erro ao carregar leads:", e); return []; }
+  } catch(e) { console.warn("Erro loadLeads:", e); return []; }
 }
 
+// Atualiza campos específicos de um lead
 async function updateLeadInSupabase(leadId, updates, userId) {
-  if(!userId||userId==="demo") return;
+  if (!userId || userId === "demo") return;
   try {
     const allowed = {};
-    if(updates.status !== undefined) allowed.status = updates.status;
-    if(updates.ai_message !== undefined) allowed.ai_message = updates.ai_message;
-    if(updates.history !== undefined) allowed.history = updates.history;
-    if(Object.keys(allowed).length === 0) return;
+    if (updates.status      !== undefined) allowed.status      = updates.status;
+    if (updates.ai_message  !== undefined) allowed.ai_message  = updates.ai_message;
+    if (updates.history     !== undefined) allowed.history     = updates.history;
+    if (Object.keys(allowed).length === 0) return;
     await sbFetch(`/rest/v1/leads?id=eq.${leadId}&user_id=eq.${userId}`, {
-      method:"PATCH",
-      headers:{"Prefer":"return=minimal"},
-      body:JSON.stringify(allowed)
+      method: "PATCH",
+      headers: { "Prefer": "return=minimal" },
+      body: JSON.stringify(allowed)
     });
-  } catch(e) { console.warn("Erro ao atualizar lead:", e); }
+  } catch(e) { console.warn("Erro updateLead:", e); }
 }
 
 // ─── HASH NAVIGATION ──────────────────────────────────────────
@@ -507,13 +544,21 @@ function AuthScreen({ onAuth }) {
       if(mode==="login"){
         const {ok,data}=await sbFetch("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password})});
         if(!ok) throw new Error(data.error_description||"Credenciais inválidas");
-        storeSession(data);onAuth({session:data,user:data.user});
+        // CORREÇÃO: salva user junto com session para restauração confiável
+        const sessionWithUser = { ...data, user: data.user };
+        storeSession(sessionWithUser);
+        onAuth({ session: data, user: data.user });
       } else if(mode==="signup"){
         if(!name){setError("Digite seu nome");setLoading(false);return;}
         const {ok,data}=await sbFetch("/auth/v1/signup",{method:"POST",body:JSON.stringify({email,password,data:{full_name:name}})});
         if(!ok) throw new Error(data.error_description||"Erro ao cadastrar");
-        if(data.access_token){storeSession(data);onAuth({session:data,user:data.user});}
-        else setSuccess("✅ Verifique seu email para confirmar o cadastro!");
+        if(data.access_token){
+          const sessionWithUser = { ...data, user: data.user };
+          storeSession(sessionWithUser);
+          onAuth({ session: data, user: data.user });
+        } else {
+          setSuccess("✅ Verifique seu email para confirmar o cadastro!");
+        }
       } else {
         await sbFetch("/auth/v1/recover",{method:"POST",body:JSON.stringify({email})});
         setSuccess("✅ Link enviado para seu email!");
@@ -521,7 +566,12 @@ function AuthScreen({ onAuth }) {
     } catch(e){setError(e.message);}
     setLoading(false);
   };
-  const demo=()=>onAuth({session:{access_token:"demo"},user:{id:"demo",email:"demo@leadai.com",user_metadata:{full_name:"Usuário Demo"}}});
+
+  const demo=()=>{
+    const demoSession = { access_token:"demo", user:{ id:"demo", email:"demo@leadai.com", user_metadata:{ full_name:"Usuário Demo" } } };
+    storeSession(demoSession);
+    onAuth({ session:demoSession, user:demoSession.user });
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-[#0f0f1a] relative overflow-hidden fade-in">
@@ -710,7 +760,6 @@ function SearchPage({ onLeadsFound, plan, credits, onNeedUpgrade }) {
   const planInfo=PLANS.find(p=>p.id===plan)||PLANS[0];
 
   const run=async()=>{
-    // CORREÇÃO 3: bloqueia busca se sem créditos
     if(credits !== null && credits <= 0){
       setErrorMsg("Você não tem créditos disponíveis. Faça upgrade do plano.");
       return;
@@ -909,161 +958,233 @@ function BottomNav({ active, onChange }) {
 
 // ─── APP ROOT ─────────────────────────────────────────────────
 function App() {
-  const [auth,setAuth]=useState(null);
-  const [page,setPage]=useState(getPageFromHash);
-  const [leads,setLeads]=useState([]);
-  const [plan,setPlan]=useState("free");
-  const [credits,setCredits]=useState(null);
-  const [showOnboard,setShowOnboard]=useState(false);
-  const [checkoutPlan,setCheckoutPlan]=useState(null);
-  const [loadingLeads,setLoadingLeads]=useState(false);
+  const [auth, setAuth]           = useState(null);
+  const [page, setPage]           = useState(getPageFromHash);
+  const [leads, setLeads]         = useState([]);
+  const [plan, setPlan]           = useState("free");
+  const [credits, setCredits]     = useState(null);
+  const [showOnboard, setShowOnboard] = useState(false);
+  const [checkoutPlan, setCheckoutPlan] = useState(null);
+  const [loadingLeads, setLoadingLeads] = useState(false);
 
-  // CORREÇÃO 4: useEffect único e limpo para restaurar sessão + carregar dados
-  // Usa apenas a tabela "profiles" como fonte de verdade.
-  // Remove conflito com "usuarios" (SDK) que quebrava o app.
-  useEffect(()=>{
+  // ── 1. Restaurar sessão do localStorage na inicialização ──
+  // CORREÇÃO PRINCIPAL: user é guardado dentro da sessão no login,
+  // então sempre temos auth.user disponível sem precisar fazer
+  // outra chamada de API, evitando race condition.
+  useEffect(() => {
     const s = getStoredSession();
-    if(!s) return;
+    if (!s) return;
 
-    if(s.access_token === "demo"){
-      setAuth({ session:s, user:{ id:"demo", email:"demo@leadai.com", user_metadata:{full_name:"Usuário Demo"} } });
+    if (s.access_token === "demo") {
+      setAuth({
+        session: s,
+        user: s.user || { id:"demo", email:"demo@leadai.com", user_metadata:{ full_name:"Usuário Demo" } }
+      });
       setCredits(50);
       return;
     }
 
-    if(s.user){
-      setAuth({ session:s, user:s.user });
+    // Token real: restaura user que foi salvo junto
+    if (s.access_token && s.user?.id) {
+      setAuth({ session: s, user: s.user });
     }
-  },[]);
+  }, []);
 
-  // Quando auth muda, carrega leads + perfil do Supabase
-  useEffect(()=>{
-    if(!auth?.user?.id || auth.user.id === "demo") return;
-    const userId = auth.user.id;
+  // ── 2. Carregar leads + perfil quando auth muda ──
+  // CORREÇÃO: userId capturado antes do Promise.all para evitar closure stale
+  useEffect(() => {
+    if (!auth?.user?.id) return;
+    const userId    = auth.user.id;
     const userEmail = auth.user.email || "";
-    setLoadingLeads(true);
 
+    if (userId === "demo") {
+      setCredits(50);
+      setPlan("free");
+      return;
+    }
+
+    setLoadingLeads(true);
     Promise.all([
       loadLeadsFromSupabase(userId),
-      loadUserData(userId, userEmail)   // cria perfil se não existir
-    ]).then(([savedLeads, profile])=>{
-      if(savedLeads.length > 0) setLeads(savedLeads);
-      if(profile){
-        // "plan" ou "plano" — aceita ambos para compatibilidade
-        const p = profile.plan || profile.plano || "free";
-        const c = profile.credits != null ? profile.credits : (profile.creditos != null ? profile.creditos : 50);
-        setPlan(p);
-        setCredits(c);
+      loadUserData(userId, userEmail)
+    ])
+    .then(([savedLeads, profile]) => {
+      if (savedLeads && savedLeads.length > 0) {
+        setLeads(savedLeads);
       }
-      setLoadingLeads(false);
-    }).catch(()=>{ setLoadingLeads(false); });
-  },[auth]);
+      if (profile) {
+        setPlan(profile.plan    || "free");
+        setCredits(profile.credits != null ? Number(profile.credits) : 50);
+      } else {
+        // fallback se loadUserData retornar null
+        setPlan("free");
+        setCredits(50);
+      }
+    })
+    .catch(err => {
+      console.warn("Erro ao carregar dados:", err);
+      setPlan("free");
+      setCredits(50);
+    })
+    .finally(() => setLoadingLeads(false));
+  }, [auth]);
 
-  // Hash navigation — botão voltar não fecha o app
-  useEffect(()=>{
-    const onHash=()=>{ const p=getPageFromHash(); setPage(p); };
-    window.addEventListener("hashchange",onHash);
-    return()=>window.removeEventListener("hashchange",onHash);
-  },[]);
+  // ── 3. Hash navigation ──
+  useEffect(() => {
+    const onHash = () => { const p = getPageFromHash(); setPage(p); };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
-  // Sincronizar hash com page
-  useEffect(()=>{
-    if(window.location.hash.replace("#","") !== page){
-      window.history.pushState(null,"",`#${page}`);
+  useEffect(() => {
+    if (window.location.hash.replace("#","") !== page) {
+      window.history.pushState(null, "", `#${page}`);
     }
-  },[page]);
+  }, [page]);
 
-  // Onboarding
-  useEffect(()=>{
-    if(auth && !getLs("onboard_done",false)) setShowOnboard(true);
-  },[auth]);
+  // ── 4. Onboarding ──
+  useEffect(() => {
+    if (auth && !getLs("onboard_done", false)) setShowOnboard(true);
+  }, [auth]);
 
-  const navigate=(p)=>{ setPage(p); window.history.pushState(null,"",`#${p}`); };
-
-  const handleAuth=(a)=>{
-    setAuth(a);
-    storeSession({...a.session, user:a.user});
+  const navigate = (p) => {
+    setPage(p);
+    window.history.pushState(null, "", `#${p}`);
   };
 
-  const handleLogout=()=>{
+  // CORREÇÃO: salva user junto com session para restauração confiável
+  const handleAuth = (a) => {
+    const sessionToStore = { ...a.session, user: a.user };
+    storeSession(sessionToStore);
+    setAuth(a);
+  };
+
+  const handleLogout = () => {
     storeSession(null);
     setAuth(null);
     setPage("dashboard");
     setLeads([]);
     setCredits(null);
     setPlan("free");
-    window.history.pushState(null,"","#dashboard");
+    window.history.pushState(null, "", "#dashboard");
   };
 
-  const handleOnboardDone=()=>{ setLs("onboard_done",true); setShowOnboard(false); };
+  const handleOnboardDone = () => { setLs("onboard_done", true); setShowOnboard(false); };
 
-  // CORREÇÃO 4 cont.: handleLeadsFound decrementa crédito e salva no banco imediatamente
-  const handleLeadsFound=async(newLeads)=>{
-    setLeads(prev=>{
-      const existingIds=new Set(prev.map(l=>l.id));
-      const merged=[...newLeads,...prev.filter(l=>!newLeads.find(n=>n.id===l.id)||!existingIds.has(l.id))];
-      if(auth?.user?.id && auth.user.id !== "demo"){
-        saveLeadsToSupabase(newLeads, auth.user.id);
-      }
-      return merged;
+  // CORREÇÃO: userId capturado fora do setLeads callback para evitar closure stale
+  const handleLeadsFound = async (newLeads) => {
+    const userId = auth?.user?.id;
+
+    setLeads(prev => {
+      const newIds = new Set(newLeads.map(l => l.id));
+      // Merge: novos leads na frente, antigos que não estão nos novos atrás
+      return [...newLeads, ...prev.filter(l => !newIds.has(l.id))];
     });
+
+    // Salva no Supabase fora do setLeads (userId já capturado)
+    if (userId && userId !== "demo") {
+      saveLeadsToSupabase(newLeads, userId);
+    }
+
     navigate("leads");
 
-    // Decrementa crédito e persiste no banco
-    setCredits(prev=>{
-      const current = prev ?? 50;
+    // Decrementa crédito e persiste
+    setCredits(prev => {
+      const current  = prev != null ? prev : 50;
       const novoValor = Math.max(0, current - 1);
-      if(auth?.user?.id && auth.user.id !== "demo"){
-        saveProfileToSupabase(auth.user.id, { credits: novoValor });
+      if (userId && userId !== "demo") {
+        saveProfileToSupabase(userId, { credits: novoValor });
       }
       return novoValor;
     });
   };
 
-  const handleStatus=(id,status)=>{
-    setLeads(prev=>prev.map(l=>{
-      if(l.id!==id) return l;
-      const updated={...l,status};
-      if(auth?.user?.id&&auth.user.id!=="demo") updateLeadInSupabase(id,{status},auth.user.id);
+  const handleStatus = (id, status) => {
+    const userId = auth?.user?.id;
+    setLeads(prev => prev.map(l => {
+      if (l.id !== id) return l;
+      const updated = { ...l, status };
+      if (userId && userId !== "demo") updateLeadInSupabase(id, { status }, userId);
       return updated;
     }));
   };
 
-  const handleUpdateLead=(id,updates)=>{
-    setLeads(prev=>prev.map(l=>{
-      if(l.id!==id) return l;
-      const updated={...l,...updates};
-      if(auth?.user?.id&&auth.user.id!=="demo") updateLeadInSupabase(id,updates,auth.user.id);
+  const handleUpdateLead = (id, updates) => {
+    const userId = auth?.user?.id;
+    setLeads(prev => prev.map(l => {
+      if (l.id !== id) return l;
+      const updated = { ...l, ...updates };
+      if (userId && userId !== "demo") updateLeadInSupabase(id, updates, userId);
       return updated;
     }));
   };
 
-  const handleCheckout=(planId)=>setCheckoutPlan(planId);
-  const handleCheckoutClose=()=>setCheckoutPlan(null);
+  const handleCheckout  = (planId) => setCheckoutPlan(planId);
+  const handleCheckoutClose = () => setCheckoutPlan(null);
+  const handleCheckoutSuccess = (p) => {
+    const userId = auth?.user?.id;
+    const nc = PLANS.find(x => x.id === p)?.credits || 50;
+    setPlan(p);
+    setCredits(nc);
+    if (userId && userId !== "demo") {
+      saveProfileToSupabase(userId, { plan: p, credits: nc });
+    }
+    setCheckoutPlan(null);
+    navigate("dashboard");
+  };
 
-  if(!auth) return <AuthScreen onAuth={handleAuth}/>;
+  if (!auth) return <AuthScreen onAuth={handleAuth}/>;
 
-  if(page==="plans") return (
+  if (page === "plans") return (
     <div className="min-h-screen bg-[#0f0f1a] max-w-lg mx-auto">
-      <PlansScreen currentPlan={plan} userEmail={auth.user?.email} userName={auth.user?.user_metadata?.full_name} onBack={()=>navigate("dashboard")} onCheckout={handleCheckout}/>
-      {checkoutPlan&&<CheckoutModal plan={checkoutPlan} userEmail={auth.user?.email} userName={auth.user?.user_metadata?.full_name} onClose={handleCheckoutClose} onSuccess={(p)=>{setPlan(p);const nc=PLANS.find(x=>x.id===p)?.credits||50;setCredits(nc);saveProfileToSupabase(auth.user.id,{plan:p,credits:nc});setCheckoutPlan(null);navigate("dashboard");}}/>}
+      <PlansScreen
+        currentPlan={plan}
+        userEmail={auth.user?.email}
+        userName={auth.user?.user_metadata?.full_name}
+        onBack={()=>navigate("dashboard")}
+        onCheckout={handleCheckout}
+      />
+      {checkoutPlan && (
+        <CheckoutModal
+          plan={checkoutPlan}
+          userEmail={auth.user?.email}
+          userName={auth.user?.user_metadata?.full_name}
+          onClose={handleCheckoutClose}
+          onSuccess={handleCheckoutSuccess}
+        />
+      )}
     </div>
   );
 
   return (
     <div className="min-h-screen bg-[#0f0f1a]">
-      <div className="fixed inset-0 pointer-events-none"><div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-96 bg-indigo-600/10 rounded-full blur-3xl"/><div className="absolute bottom-20 right-0 w-64 h-64 bg-purple-600/10 rounded-full blur-3xl"/></div>
-      {showOnboard&&<OnboardingModal onDone={handleOnboardDone}/>}
-      {checkoutPlan&&<CheckoutModal plan={checkoutPlan} userEmail={auth.user?.email} userName={auth.user?.user_metadata?.full_name} onClose={handleCheckoutClose} onSuccess={(p)=>{setPlan(p);const nc=PLANS.find(x=>x.id===p)?.credits||50;setCredits(nc);saveProfileToSupabase(auth.user.id,{plan:p,credits:nc});setCheckoutPlan(null);}}/>}
-      {loadingLeads&&<div className="fixed top-4 right-4 z-50 glass rounded-xl px-3 py-2 text-xs text-indigo-300 border border-indigo-500/30 flex items-center gap-2"><Spinner/> Carregando seus leads...</div>}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-96 bg-indigo-600/10 rounded-full blur-3xl"/>
+        <div className="absolute bottom-20 right-0 w-64 h-64 bg-purple-600/10 rounded-full blur-3xl"/>
+      </div>
+      {showOnboard && <OnboardingModal onDone={handleOnboardDone}/>}
+      {checkoutPlan && (
+        <CheckoutModal
+          plan={checkoutPlan}
+          userEmail={auth.user?.email}
+          userName={auth.user?.user_metadata?.full_name}
+          onClose={handleCheckoutClose}
+          onSuccess={handleCheckoutSuccess}
+        />
+      )}
+      {loadingLeads && (
+        <div className="fixed top-4 right-4 z-50 glass rounded-xl px-3 py-2 text-xs text-indigo-300 border border-indigo-500/30 flex items-center gap-2">
+          <Spinner/> Carregando seus leads...
+        </div>
+      )}
       <div className="desktop-shell">
         <DesktopSidebar active={page} onChange={navigate} plan={plan} user={auth.user}/>
         <div className="desktop-content relative z-10">
-          {page==="dashboard"&&<Dashboard leads={leads} user={auth.user} plan={plan} credits={credits} onNavigate={navigate}/>}
-          {page==="search"&&<SearchPage onLeadsFound={handleLeadsFound} plan={plan} credits={credits} onNeedUpgrade={()=>navigate("plans")}/>}
-          {page==="leads"&&<LeadsPage leads={leads} onStatusChange={handleStatus} onUpdateLead={handleUpdateLead}/>}
-          {page==="crm"&&<CRMPage leads={leads} onStatusChange={handleStatus} onUpdateLead={handleUpdateLead}/>}
-          {page==="profile"&&<ProfilePage user={auth.user} plan={plan} credits={credits} onNavigate={navigate} onLogout={handleLogout}/>}
+          {page==="dashboard" && <Dashboard leads={leads} user={auth.user} plan={plan} credits={credits} onNavigate={navigate}/>}
+          {page==="search"    && <SearchPage onLeadsFound={handleLeadsFound} plan={plan} credits={credits} onNeedUpgrade={()=>navigate("plans")}/>}
+          {page==="leads"     && <LeadsPage leads={leads} onStatusChange={handleStatus} onUpdateLead={handleUpdateLead}/>}
+          {page==="crm"       && <CRMPage leads={leads} onStatusChange={handleStatus} onUpdateLead={handleUpdateLead}/>}
+          {page==="profile"   && <ProfilePage user={auth.user} plan={plan} credits={credits} onNavigate={navigate} onLogout={handleLogout}/>}
         </div>
       </div>
       <BottomNav active={page} onChange={navigate}/>
