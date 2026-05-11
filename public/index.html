@@ -79,6 +79,52 @@ async function sbFetch(path,opts={}) {
 }
 
 // ─── SUPABASE PERSISTENCE ─────────────────────────────────────
+
+// CORREÇÃO 1: loadUserData usa sbFetch (não SDK), com upsert automático
+// Tabela única: profiles. Sem conflito com "usuarios".
+async function loadUserData(userId, email) {
+  if(!userId || userId === "demo") return null;
+  try {
+    // Tenta buscar perfil existente
+    const {ok, data} = await sbFetch(`/rest/v1/profiles?id=eq.${userId}`);
+    if(ok && Array.isArray(data) && data.length > 0) {
+      return data[0]; // retorna {credits, plan, ...}
+    }
+    // Perfil não existe: cria com valores padrão
+    const newProfile = { id: userId, email: email||"", plan: "free", credits: 50 };
+    await sbFetch("/rest/v1/profiles", {
+      method: "POST",
+      headers: { "Prefer": "return=representation" },
+      body: JSON.stringify(newProfile)
+    });
+    return newProfile;
+  } catch(e) {
+    console.warn("Erro loadUserData:", e);
+    return null;
+  }
+}
+
+// CORREÇÃO 2: saveProfileToSupabase usa upsert para garantir que sempre grava
+async function saveProfileToSupabase(userId, updates) {
+  if(!userId || userId === "demo") return;
+  try {
+    // Tenta PATCH primeiro
+    const {ok} = await sbFetch(`/rest/v1/profiles?id=eq.${userId}`, {
+      method: "PATCH",
+      headers: { "Prefer": "return=minimal" },
+      body: JSON.stringify(updates)
+    });
+    // Se não achou o registro (0 rows), faz upsert
+    if(!ok) {
+      await sbFetch("/rest/v1/profiles", {
+        method: "POST",
+        headers: { "Prefer": "resolution=merge-duplicates" },
+        body: JSON.stringify({ id: userId, ...updates })
+      });
+    }
+  } catch(e) { console.warn("Erro ao salvar perfil:", e); }
+}
+
 async function saveLeadsToSupabase(leads, userId) {
   if(!userId||userId==="demo"||leads.length===0) return;
   try {
@@ -149,27 +195,7 @@ async function updateLeadInSupabase(leadId, updates, userId) {
   } catch(e) { console.warn("Erro ao atualizar lead:", e); }
 }
 
-async function loadProfileFromSupabase(userId) {
-  if(!userId||userId==="demo") return null;
-  try {
-    const {ok,data} = await sbFetch(`/rest/v1/profiles?id=eq.${userId}`);
-    if(!ok||!Array.isArray(data)||data.length===0) return null;
-    return data[0];
-  } catch(e) { return null; }
-}
-
-async function saveProfileToSupabase(userId, updates) {
-  if(!userId||userId==="demo") return;
-  try {
-    await sbFetch(`/rest/v1/profiles?id=eq.${userId}`, {
-      method:"PATCH",
-      headers:{"Prefer":"return=minimal"},
-      body:JSON.stringify(updates)
-    });
-  } catch(e) { console.warn("Erro ao salvar perfil:", e); }
-}
-
-// ─── HASH NAVIGATION (resolve botão voltar) ───────────────────
+// ─── HASH NAVIGATION ──────────────────────────────────────────
 const VALID_PAGES = ["dashboard","search","leads","crm","profile","plans"];
 function getPageFromHash() {
   const h = window.location.hash.replace("#","");
@@ -623,7 +649,7 @@ function Dashboard({ leads, user, plan, onNavigate, credits }) {
   const closed=leads.filter(l=>l.status==="closed").length;
   const planInfo=PLANS.find(p=>p.id===plan)||PLANS[0];
   const creditMax=planInfo.credits||50;
-  const creditPct=Math.min(100,Math.round((credits/creditMax)*100));
+  const creditPct=Math.min(100,Math.round(((credits||0)/creditMax)*100));
   const name=user?.user_metadata?.full_name||user?.email?.split("@")[0]||"Usuário";
   return (
     <div className="pb-24 slide-in">
@@ -636,9 +662,9 @@ function Dashboard({ leads, user, plan, onNavigate, credits }) {
       </div>
       <div className="px-4 mb-4">
         <div className="glass rounded-2xl p-3 border border-white/5">
-          <div className="flex justify-between items-center mb-1.5"><span className="text-xs text-gray-400">Créditos do mês</span><span className="text-xs font-bold text-indigo-300">{credits}/{creditMax}</span></div>
+          <div className="flex justify-between items-center mb-1.5"><span className="text-xs text-gray-400">Créditos do mês</span><span className="text-xs font-bold text-indigo-300">{credits??'...'}/{creditMax}</span></div>
           <div className="h-1.5 bg-white/10 rounded-full overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500" style={{width:`${creditPct}%`}}/></div>
-          {credits<creditMax*.2&&<button onClick={()=>onNavigate("plans")} className="mt-1 text-xs text-yellow-400">⚠️ Créditos acabando — Upgrade →</button>}
+          {credits!==null&&credits<creditMax*.2&&<button onClick={()=>onNavigate("plans")} className="mt-1 text-xs text-yellow-400">⚠️ Créditos acabando — Upgrade →</button>}
         </div>
       </div>
       <div className="px-4 grid grid-cols-2 gap-3">
@@ -673,7 +699,7 @@ function Dashboard({ leads, user, plan, onNavigate, credits }) {
 }
 
 // ─── SEARCH PAGE ──────────────────────────────────────────────
-function SearchPage({ onLeadsFound, plan, onNeedUpgrade }) {
+function SearchPage({ onLeadsFound, plan, credits, onNeedUpgrade }) {
   const [form,setForm]=useState({niche:"",city:"",radius:"10",minRating:"3.5",minReviews:"20"});
   const [loading,setLoading]=useState(false);
   const [step,setStep]=useState("");
@@ -684,6 +710,11 @@ function SearchPage({ onLeadsFound, plan, onNeedUpgrade }) {
   const planInfo=PLANS.find(p=>p.id===plan)||PLANS[0];
 
   const run=async()=>{
+    // CORREÇÃO 3: bloqueia busca se sem créditos
+    if(credits !== null && credits <= 0){
+      setErrorMsg("Você não tem créditos disponíveis. Faça upgrade do plano.");
+      return;
+    }
     if(!form.niche||!form.city){alert("Preencha nicho e cidade!");return;}
     setLoading(true);setDone(false);setErrorMsg("");
     const steps=["🔍 Buscando no Google Maps...","✅ Estabelecimentos encontrados","🧹 Filtrando por critérios...","📱 Validando dados...","🤖 IA analisando avaliações...","✨ Gerando scores de oportunidade..."];
@@ -821,8 +852,8 @@ function ProfilePage({ user, plan, credits, onNavigate, onLogout }) {
       </div>
       <div className="px-4 space-y-4">
         <div className="glass rounded-2xl p-4 border border-indigo-500/20">
-          <div className="flex justify-between items-center mb-2"><p className="font-semibold text-sm">Créditos restantes</p><p className="text-indigo-300 font-bold">{credits}/{planInfo.credits}</p></div>
-          <div className="h-2 bg-white/10 rounded-full overflow-hidden mb-2"><div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500" style={{width:`${Math.min(100,Math.round(credits/planInfo.credits*100))}%`}}/></div>
+          <div className="flex justify-between items-center mb-2"><p className="font-semibold text-sm">Créditos restantes</p><p className="text-indigo-300 font-bold">{credits??'...'}/{planInfo.credits}</p></div>
+          <div className="h-2 bg-white/10 rounded-full overflow-hidden mb-2"><div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500" style={{width:`${Math.min(100,Math.round(((credits||0)/planInfo.credits)*100))}%`}}/></div>
           <button onClick={()=>onNavigate("plans")} className="text-xs text-indigo-400">↑ Aumentar limite</button>
         </div>
         <div className="glass rounded-2xl p-4 border border-white/5">
@@ -887,91 +918,71 @@ function App() {
   const [checkoutPlan,setCheckoutPlan]=useState(null);
   const [loadingLeads,setLoadingLeads]=useState(false);
 
-  // ── Restaurar sessão ao carregar ── 
-  async function loadUserData(userId){
-  const { data, error } = await supabase
-    .from("usuarios")
-    .select("*")
-    .eq("id", userId)
-    .single();
-
-  if(data){
-    setCredits(data.creditos);
-    setPlan(data.plano);
-  }
-
-  if(error){
-    console.error("Erro ao carregar usuário:", error);
-  }
-}
+  // CORREÇÃO 4: useEffect único e limpo para restaurar sessão + carregar dados
+  // Usa apenas a tabela "profiles" como fonte de verdade.
+  // Remove conflito com "usuarios" (SDK) que quebrava o app.
   useEffect(()=>{
-  const s = getStoredSession();
+    const s = getStoredSession();
+    if(!s) return;
 
-  if(s?.access_token==="demo"){
-    setAuth({
-      session:s,
-      user:{
-        id:"demo",
-        email:"demo@leadai.com",
-        user_metadata:{full_name:"Usuário Demo"}
-      }
-    });
+    if(s.access_token === "demo"){
+      setAuth({ session:s, user:{ id:"demo", email:"demo@leadai.com", user_metadata:{full_name:"Usuário Demo"} } });
+      setCredits(50);
+      return;
+    }
 
-    setCredits(50);
+    if(s.user){
+      setAuth({ session:s, user:s.user });
+    }
+  },[]);
 
-  } else if(s?.user){
-
-    setAuth({
-      session:s,
-      user:s.user
-    });
-
-    loadUserData(s.user.id);
-  }
-
-},[]);
-  // ── Carregar leads + perfil do Supabase quando autenticar ──
+  // Quando auth muda, carrega leads + perfil do Supabase
   useEffect(()=>{
-    if(!auth?.user?.id||auth.user.id==="demo") return;
-    const userId=auth.user.id;
+    if(!auth?.user?.id || auth.user.id === "demo") return;
+    const userId = auth.user.id;
+    const userEmail = auth.user.email || "";
     setLoadingLeads(true);
+
     Promise.all([
       loadLeadsFromSupabase(userId),
-      loadProfileFromSupabase(userId)
+      loadUserData(userId, userEmail)   // cria perfil se não existir
     ]).then(([savedLeads, profile])=>{
-      if(savedLeads.length>0) setLeads(savedLeads);
+      if(savedLeads.length > 0) setLeads(savedLeads);
       if(profile){
-        if(profile.plan) setPlan(profile.plan);
-        if(profile.credits!=null) setCredits(profile.credits);
+        // "plan" ou "plano" — aceita ambos para compatibilidade
+        const p = profile.plan || profile.plano || "free";
+        const c = profile.credits != null ? profile.credits : (profile.creditos != null ? profile.creditos : 50);
+        setPlan(p);
+        setCredits(c);
       }
       setLoadingLeads(false);
-    });
+    }).catch(()=>{ setLoadingLeads(false); });
   },[auth]);
 
-  // ── Hash navigation — botão voltar não fecha o app ──
+  // Hash navigation — botão voltar não fecha o app
   useEffect(()=>{
     const onHash=()=>{ const p=getPageFromHash(); setPage(p); };
     window.addEventListener("hashchange",onHash);
     return()=>window.removeEventListener("hashchange",onHash);
   },[]);
 
-  // ── Sincronizar hash com page ──
+  // Sincronizar hash com page
   useEffect(()=>{
-    if(window.location.hash.replace("#","")!==page){
+    if(window.location.hash.replace("#","") !== page){
       window.history.pushState(null,"",`#${page}`);
     }
   },[page]);
 
-  // ── Onboarding ──
+  // Onboarding
   useEffect(()=>{
-    if(auth&&!getLs("onboard_done",false)) setShowOnboard(true);
+    if(auth && !getLs("onboard_done",false)) setShowOnboard(true);
   },[auth]);
 
   const navigate=(p)=>{ setPage(p); window.history.pushState(null,"",`#${p}`); };
 
   const handleAuth=(a)=>{
     setAuth(a);
-    storeSession({...a.session,user:a.user});
+    storeSession({...a.session, user:a.user});
   };
 
   const handleLogout=()=>{
@@ -979,25 +990,34 @@ function App() {
     setAuth(null);
     setPage("dashboard");
     setLeads([]);
+    setCredits(null);
+    setPlan("free");
     window.history.pushState(null,"","#dashboard");
   };
 
   const handleOnboardDone=()=>{ setLs("onboard_done",true); setShowOnboard(false); };
 
+  // CORREÇÃO 4 cont.: handleLeadsFound decrementa crédito e salva no banco imediatamente
   const handleLeadsFound=async(newLeads)=>{
-    // Mescla novos leads com existentes (evita duplicatas por id)
     setLeads(prev=>{
       const existingIds=new Set(prev.map(l=>l.id));
-      const merged=[...newLeads,...prev.filter(l=>!existingIds.has(l.id)||!newLeads.find(n=>n.id===l.id))];
-      // Salva no Supabase
-      if(auth?.user?.id&&auth.user.id!=="demo"){
+      const merged=[...newLeads,...prev.filter(l=>!newLeads.find(n=>n.id===l.id)||!existingIds.has(l.id))];
+      if(auth?.user?.id && auth.user.id !== "demo"){
         saveLeadsToSupabase(newLeads, auth.user.id);
       }
       return merged;
     });
-    setPage("leads");
-    window.history.pushState(null,"","#leads");
-    setCredits(c=>{ const nv=Math.max(0,c-1); if(auth?.user?.id&&auth.user.id!=="demo") saveProfileToSupabase(auth.user.id,{credits:nv}); return nv; });
+    navigate("leads");
+
+    // Decrementa crédito e persiste no banco
+    setCredits(prev=>{
+      const current = prev ?? 50;
+      const novoValor = Math.max(0, current - 1);
+      if(auth?.user?.id && auth.user.id !== "demo"){
+        saveProfileToSupabase(auth.user.id, { credits: novoValor });
+      }
+      return novoValor;
+    });
   };
 
   const handleStatus=(id,status)=>{
@@ -1026,7 +1046,7 @@ function App() {
   if(page==="plans") return (
     <div className="min-h-screen bg-[#0f0f1a] max-w-lg mx-auto">
       <PlansScreen currentPlan={plan} userEmail={auth.user?.email} userName={auth.user?.user_metadata?.full_name} onBack={()=>navigate("dashboard")} onCheckout={handleCheckout}/>
-      {checkoutPlan&&<CheckoutModal plan={checkoutPlan} userEmail={auth.user?.email} userName={auth.user?.user_metadata?.full_name} onClose={handleCheckoutClose} onSuccess={(p)=>{setPlan(p);setCredits(PLANS.find(x=>x.id===p)?.credits||50);saveProfileToSupabase(auth.user.id,{plan:p,credits:PLANS.find(x=>x.id===p)?.credits||50});setCheckoutPlan(null);navigate("dashboard");}}/>}
+      {checkoutPlan&&<CheckoutModal plan={checkoutPlan} userEmail={auth.user?.email} userName={auth.user?.user_metadata?.full_name} onClose={handleCheckoutClose} onSuccess={(p)=>{setPlan(p);const nc=PLANS.find(x=>x.id===p)?.credits||50;setCredits(nc);saveProfileToSupabase(auth.user.id,{plan:p,credits:nc});setCheckoutPlan(null);navigate("dashboard");}}/>}
     </div>
   );
 
@@ -1034,13 +1054,13 @@ function App() {
     <div className="min-h-screen bg-[#0f0f1a]">
       <div className="fixed inset-0 pointer-events-none"><div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-96 bg-indigo-600/10 rounded-full blur-3xl"/><div className="absolute bottom-20 right-0 w-64 h-64 bg-purple-600/10 rounded-full blur-3xl"/></div>
       {showOnboard&&<OnboardingModal onDone={handleOnboardDone}/>}
-      {checkoutPlan&&<CheckoutModal plan={checkoutPlan} userEmail={auth.user?.email} userName={auth.user?.user_metadata?.full_name} onClose={handleCheckoutClose} onSuccess={(p)=>{setPlan(p);setCredits(PLANS.find(x=>x.id===p)?.credits||50);saveProfileToSupabase(auth.user.id,{plan:p});setCheckoutPlan(null);}}/>}
+      {checkoutPlan&&<CheckoutModal plan={checkoutPlan} userEmail={auth.user?.email} userName={auth.user?.user_metadata?.full_name} onClose={handleCheckoutClose} onSuccess={(p)=>{setPlan(p);const nc=PLANS.find(x=>x.id===p)?.credits||50;setCredits(nc);saveProfileToSupabase(auth.user.id,{plan:p,credits:nc});setCheckoutPlan(null);}}/>}
       {loadingLeads&&<div className="fixed top-4 right-4 z-50 glass rounded-xl px-3 py-2 text-xs text-indigo-300 border border-indigo-500/30 flex items-center gap-2"><Spinner/> Carregando seus leads...</div>}
       <div className="desktop-shell">
         <DesktopSidebar active={page} onChange={navigate} plan={plan} user={auth.user}/>
         <div className="desktop-content relative z-10">
           {page==="dashboard"&&<Dashboard leads={leads} user={auth.user} plan={plan} credits={credits} onNavigate={navigate}/>}
-          {page==="search"&&<SearchPage onLeadsFound={handleLeadsFound} plan={plan} onNeedUpgrade={()=>navigate("plans")}/>}
+          {page==="search"&&<SearchPage onLeadsFound={handleLeadsFound} plan={plan} credits={credits} onNeedUpgrade={()=>navigate("plans")}/>}
           {page==="leads"&&<LeadsPage leads={leads} onStatusChange={handleStatus} onUpdateLead={handleUpdateLead}/>}
           {page==="crm"&&<CRMPage leads={leads} onStatusChange={handleStatus} onUpdateLead={handleUpdateLead}/>}
           {page==="profile"&&<ProfilePage user={auth.user} plan={plan} credits={credits} onNavigate={navigate} onLogout={handleLogout}/>}
